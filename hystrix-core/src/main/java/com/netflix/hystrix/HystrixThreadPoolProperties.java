@@ -42,6 +42,7 @@ import com.netflix.hystrix.util.HystrixRollingNumber;
  *
  * If you accidentally set maximumSize < coreSize, then maximum will be raised to coreSize
  * (this prioritizes keeping extra threads around rather than inducing threadpool rejections)
+ * 线程池相关属性
  */
 public abstract class HystrixThreadPoolProperties {
 

@@ -28,6 +28,7 @@ import com.netflix.hystrix.strategy.HystrixPlugins;
  * 
  * @param <T>
  *            Type to be stored on the HystrixRequestVariable
+ *            在生命周期对象的基础上增加了一个 获取 该值的方法
  */
 public interface HystrixRequestVariable<T> extends HystrixRequestVariableLifecycle<T> {
 

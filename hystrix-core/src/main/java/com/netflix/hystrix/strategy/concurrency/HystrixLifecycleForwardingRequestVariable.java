@@ -24,6 +24,10 @@ package com.netflix.hystrix.strategy.concurrency;
  * does not depend on an a HystrixRequestContext
  */
 public class HystrixLifecycleForwardingRequestVariable<T> extends HystrixRequestVariableDefault<T> {
+
+    /**
+     * 内部维护了一个 hystrix 的生命周期对象
+     */
     private final HystrixRequestVariableLifecycle<T> lifecycle;
 
     /**
@@ -37,6 +41,7 @@ public class HystrixLifecycleForwardingRequestVariable<T> extends HystrixRequest
     /**
      * Delegates to the wrapped {@link HystrixRequestVariableLifecycle}
      * @return T with initial value or null if none.
+     * 针对 生命周期对象进行初始化
      */
     @Override
     public T initialValue() {
@@ -49,6 +54,7 @@ public class HystrixLifecycleForwardingRequestVariable<T> extends HystrixRequest
      *            of request variable to allow cleanup activity.
      *            <p>
      *            If nothing needs to be cleaned up then nothing needs to be done in this method.
+     *            调用 lifecycle.shutdown 方法
      */
     @Override
     public void shutdown(T value) {
@@ -60,6 +66,7 @@ public class HystrixLifecycleForwardingRequestVariable<T> extends HystrixRequest
      * <p>
      * If {@link HystrixRequestContext} has been initialized then call method in superclass:
      * {@link HystrixRequestVariableDefault#get()}
+     * 当 context 对象被初始化完毕时 通过lazyInit 对象 生成需要的值  如果 context 还不存在 返回null
      */
     @Override
     public T get() {

@@ -60,6 +60,7 @@ import com.netflix.hystrix.HystrixRequestLog;
  * You can find an implementation at <a target="_top" href="https://github.com/Netflix/Hystrix/tree/master/hystrix-contrib/hystrix-request-servlet">hystrix-contrib/hystrix-request-servlet</a> on GitHub.
  * <p>
  * <b>NOTE:</b> If <code>initializeContext()</code> is called then <code>shutdown()</code> must also be called or a memory leak will occur.
+ * hystrix 请求上下文对象 实现 closeable 接口
  */
 public class HystrixRequestContext implements Closeable {
 
@@ -72,16 +73,26 @@ public class HystrixRequestContext implements Closeable {
      * However, the only thing held by those child threads until they are re-used and re-initialized is an empty
      * HystrixRequestContext object with the ConcurrentHashMap within it nulled out since once it is nullified
      * from the parent thread it is shared across all child threads.
+     * 本地线程变量
      */
     private static ThreadLocal<HystrixRequestContext> requestVariables = new ThreadLocal<HystrixRequestContext>();
 
+    /**
+     * 判断本线程绑定的上下文对象是否初始化完成
+     * @return
+     */
     public static boolean isCurrentThreadInitialized() {
         HystrixRequestContext context = requestVariables.get();
         return context != null && context.state != null;
     }
 
+    /**
+     * 获取当前上下文对象
+     * @return
+     */
     public static HystrixRequestContext getContextForCurrentThread() {
         HystrixRequestContext context = requestVariables.get();
+        // 代表存在上下文对象  注意这里的 state 必须是 非空才被承认 context 被首次初始化时  state 就会被创建 当调用 shutdown() 时 state 会被置空
         if (context != null && context.state != null) {
             // context.state can be null when context is not null
             // if a thread is being re-used and held a context previously, the context was shut down
@@ -92,6 +103,10 @@ public class HystrixRequestContext implements Closeable {
         }
     }
 
+    /**
+     * 为绑定线程设置上下文
+     * @param state
+     */
     public static void setContextOnCurrentThread(HystrixRequestContext state) {
         requestVariables.set(state);
     }
@@ -104,6 +119,7 @@ public class HystrixRequestContext implements Closeable {
      * <b>NOTE: If this method is called then <code>shutdown()</code> must also be called or a memory leak will occur.</b>
      * <p>
      * See class header JavaDoc for example Servlet Filter implementation that initializes and shuts down the context.
+     * 初始化上下文对象
      */
     public static HystrixRequestContext initializeContext() {
         HystrixRequestContext state = new HystrixRequestContext();
@@ -115,6 +131,7 @@ public class HystrixRequestContext implements Closeable {
      * This ConcurrentHashMap should not be made publicly accessible. It is the state of RequestVariables for a given RequestContext.
      * 
      * Only HystrixRequestVariable has a reason to be accessing this field.
+     * 本上下文维护的 state
      */
     /* package */ConcurrentHashMap<HystrixRequestVariableDefault<?>, HystrixRequestVariableDefault.LazyInitializer<?>> state = new ConcurrentHashMap<HystrixRequestVariableDefault<?>, HystrixRequestVariableDefault.LazyInitializer<?>>();
 
@@ -127,12 +144,15 @@ public class HystrixRequestContext implements Closeable {
      * Shutdown {@link HystrixRequestVariableDefault} objects in this context.
      * <p>
      * <b>NOTE: This must be called if <code>initializeContext()</code> was called or a memory leak will occur.</b>
+     * 终止本上下文对象
      */
     public void shutdown() {
         if (state != null) {
+            // 获取所有的requestVariable
             for (HystrixRequestVariableDefault<?> v : state.keySet()) {
                 // for each RequestVariable we call 'remove' which performs the shutdown logic
                 try {
+                    // 将对象移除
                     HystrixRequestVariableDefault.remove(this, v);
                 } catch (Throwable t) {
                     HystrixRequestVariableDefault.logger.error("Error in shutdown, will continue with shutdown of other variables", t);

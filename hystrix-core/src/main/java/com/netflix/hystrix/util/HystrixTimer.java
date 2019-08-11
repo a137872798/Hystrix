@@ -33,11 +33,15 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Timer used by {@link HystrixCommand} to timeout async executions and {@link HystrixCollapser} to trigger batch executions.
+ * 熔断定时器
  */
 public class HystrixTimer {
 
     private static final Logger logger = LoggerFactory.getLogger(HystrixTimer.class);
 
+    /**
+     * 单例模式
+     */
     private static HystrixTimer INSTANCE = new HystrixTimer();
 
     private HystrixTimer() {
@@ -56,14 +60,20 @@ public class HystrixTimer {
      * <p>
      * NOTE: This will result in race conditions if {@link #addTimerListener(com.netflix.hystrix.util.HystrixTimer.TimerListener)} is being concurrently called.
      * </p>
+     * 重置定时器
      */
     public static void reset() {
+        // 获取当前的 定时器对象
         ScheduledExecutor ex = INSTANCE.executor.getAndSet(null);
         if (ex != null && ex.getThreadPool() != null) {
+            // 立即停止当前定时器
             ex.getThreadPool().shutdownNow();
         }
     }
 
+    /**
+     * 存放定时器的 原子引用对象
+     */
     /* package */ AtomicReference<ScheduledExecutor> executor = new AtomicReference<ScheduledExecutor>();
 
     /**
@@ -86,6 +96,7 @@ public class HystrixTimer {
      * @param listener
      *            TimerListener implementation that will be triggered according to its <code>getIntervalTimeInMilliseconds()</code> method implementation.
      * @return reference to the TimerListener that allows cleanup via the <code>clear()</code> method
+     * 返回的 监听器对象是 被 特殊引用包裹的 便于被 GC 回收
      */
     public Reference<TimerListener> addTimerListener(final TimerListener listener) {
         startThreadIfNeeded();
@@ -129,9 +140,11 @@ public class HystrixTimer {
      * Since we allow resetting the timer (shutting down the thread) we need to lazily re-start it if it starts being used again.
      * <p>
      * This does the lazy initialization and start of the thread in a thread-safe manner while having little cost the rest of the time.
+     * 启动线程
      */
     protected void startThreadIfNeeded() {
         // create and start thread if one doesn't exist
+        // 创建 定时器对象 并进行初始化
         while (executor.get() == null || ! executor.get().isInitialized()) {
             if (executor.compareAndSet(null, new ScheduledExecutor())) {
                 // initialize the executor that we 'won' setting
@@ -140,12 +153,16 @@ public class HystrixTimer {
         }
     }
 
+    /**
+     * 定时器对象  封装了 JDK 原生的定时器
+     */
     /* package */ static class ScheduledExecutor {
         /* package */ volatile ScheduledThreadPoolExecutor executor;
         private volatile boolean initialized;
 
         /**
          * We want this only done once when created in compareAndSet so use an initialize method
+         * 进行初始化
          */
         public void initialize() {
 
@@ -182,6 +199,9 @@ public class HystrixTimer {
         }
     }
 
+    /**
+     * 超时监听器对象
+     */
     public static interface TimerListener {
 
         /**
@@ -192,11 +212,13 @@ public class HystrixTimer {
          * This contract is used to keep this implementation single-threaded and simplistic.
          * <p>
          * If you need a ThreadLocal set, you can store the state in the TimerListener, then when tick() is called, set the ThreadLocal to your desired value.
+         * 每次嘀嗒时 触发
          */
         public void tick();
 
         /**
          * How often this TimerListener should 'tick' defined in milliseconds.
+         * 获取距离下次 嘀嗒的时间间隔
          */
         public int getIntervalTimeInMilliseconds();
     }

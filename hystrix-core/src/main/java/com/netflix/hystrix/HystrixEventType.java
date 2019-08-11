@@ -24,28 +24,89 @@ import java.util.List;
  * Various states/events that execution can result in or have tracked.
  * <p>
  * These are most often accessed via {@link HystrixRequestLog} or {@link HystrixCommand#getExecutionEvents()}.
+ * 熔断事件类型
  */
 public enum HystrixEventType {
+    /**
+     * 忽略
+     */
     EMIT(false),
+    /**
+     * 成功
+     */
     SUCCESS(true),
+    /**
+     * 调用失败
+     */
     FAILURE(false),
+    /**
+     * 调用超时
+     */
     TIMEOUT(false),
+    /**
+     * 请求失败
+     */
     BAD_REQUEST(true),
+    /**
+     * 短循环
+     */
     SHORT_CIRCUITED(false),
+    /**
+     * 被线程池拒绝
+     */
     THREAD_POOL_REJECTED(false),
+    /**
+     * 被信号量拒绝
+     */
     SEMAPHORE_REJECTED(false),
+    /**
+     * 回退引发的忽略
+     */
     FALLBACK_EMIT(false),
+    /**
+     * 回退引发的成功
+     */
     FALLBACK_SUCCESS(true),
+    /**
+     * 回退引发的失败
+     */
     FALLBACK_FAILURE(true),
+    /**
+     * 回退引发的拒绝
+     */
     FALLBACK_REJECTION(true),
+    /**
+     * 回退引发的 不能使用
+     */
     FALLBACK_DISABLED(true),
+    /**
+     * 回退引发的 miss???
+     */
     FALLBACK_MISSING(true),
+    /**
+     * 抛出异常
+     */
     EXCEPTION_THROWN(false),
+    /**
+     * 从缓存中获取响应结果
+     */
     RESPONSE_FROM_CACHE(true),
+    /**
+     * 被关闭
+     */
     CANCELLED(true),
+    /**
+     * 发生碰撞
+     */
     COLLAPSED(false),
+    /**
+     * 最大command 活跃 ???
+     */
     COMMAND_MAX_ACTIVE(false);
 
+    /**
+     * 是否终止
+     */
     private final boolean isTerminal;
 
     HystrixEventType(boolean isTerminal) {
@@ -83,16 +144,22 @@ public enum HystrixEventType {
 
     /**
      * List of events that throw an Exception to the caller
+     * 异常产生的事件类型
      */
     public final static List<HystrixEventType> EXCEPTION_PRODUCING_EVENT_TYPES = new ArrayList<HystrixEventType>();
 
     /**
      * List of events that are terminal
+     * 终止产生的事件类型
      */
     public final static List<HystrixEventType> TERMINAL_EVENT_TYPES = new ArrayList<HystrixEventType>();
 
     static {
+        // bad_request
         EXCEPTION_PRODUCING_EVENT_TYPES.add(BAD_REQUEST);
+
+        // fallback_xxx
+
         EXCEPTION_PRODUCING_EVENT_TYPES.add(FALLBACK_FAILURE);
         EXCEPTION_PRODUCING_EVENT_TYPES.add(FALLBACK_DISABLED);
         EXCEPTION_PRODUCING_EVENT_TYPES.add(FALLBACK_MISSING);
@@ -105,7 +172,11 @@ public enum HystrixEventType {
         }
     }
 
+    /**
+     * 线程池美剧
+     */
     public enum ThreadPool {
+        // 被执行还是被拒绝
         EXECUTED, REJECTED;
 
         public static ThreadPool from(HystrixRollingNumberEvent event) {
@@ -129,6 +200,9 @@ public enum HystrixEventType {
         }
     }
 
+    /**
+     * 碰撞枚举 ???
+     */
     public enum Collapser {
         BATCH_EXECUTED, ADDED_TO_BATCH, RESPONSE_FROM_CACHE;
 

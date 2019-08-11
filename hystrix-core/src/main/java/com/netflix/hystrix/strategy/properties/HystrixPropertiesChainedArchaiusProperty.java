@@ -37,12 +37,22 @@ public abstract class HystrixPropertiesChainedArchaiusProperty {
     private static final Logger logger = LoggerFactory.getLogger(HystrixPropertiesChainedArchaiusProperty.class);
 
     /**
+     * 应该是一个链吧
      * @ExcludeFromJavadoc
      */
     public static abstract class ChainLink<T> {
 
+        /**
+         * 链对象 被原子引用包裹
+         */
         private final AtomicReference<ChainLink<T>> pReference;
+        /**
+         * 链的下一个节点
+         */
         private final ChainLink<T> next;
+        /**
+         * 一系列的回调对象 应该是经过该链的对象会被这一系列的 回调对象处理
+         */
         private final List<Runnable> callbacks;
 
         /**
@@ -78,6 +88,9 @@ public abstract class HystrixPropertiesChainedArchaiusProperty {
             callbacks = new ArrayList<Runnable>();
         }
 
+        /**
+         * 检查 和 翻转
+         */
         protected void checkAndFlip() {
             // in case this is the end node
             if (next == null) {
@@ -287,6 +300,7 @@ public abstract class HystrixPropertiesChainedArchaiusProperty {
     }
 
     /**
+     * PropertyWrapper 是  netflix 的 config 项目相关的接口  内部应该就是 value defaultValue name 等属性
      * @ExcludeFromJavadoc
      */
     public static class DynamicBooleanProperty extends PropertyWrapper<Boolean> {

@@ -49,16 +49,25 @@ import com.netflix.hystrix.strategy.properties.HystrixPropertiesStrategyDefault;
  * which is only loaded through <code>System.properties</code> or the ServiceLoader (see the {@link HystrixPlugins#getDynamicProperties() getter} for more details).
  * <p>
  * See the Hystrix GitHub Wiki for more information: <a href="https://github.com/Netflix/Hystrix/wiki/Plugins">https://github.com/Netflix/Hystrix/wiki/Plugins</a>.
+ * 熔断器 插件类
  */
 public class HystrixPlugins {
     
     //We should not load unless we are requested to. This avoids accidental initialization. @agentgt
     //See https://en.wikipedia.org/wiki/Initialization-on-demand_holder_idiom
+
+    /**
+     * 当引用该实例对象 后 静态域才会触发对象的创建
+     */
     private static class LazyHolder { private static final HystrixPlugins INSTANCE = HystrixPlugins.create(); }
+
+    /**
+     * 类加载器
+     */
     private final ClassLoader classLoader;
-    /* package */ final AtomicReference<HystrixEventNotifier> notifier = new AtomicReference<HystrixEventNotifier>();
-    /* package */ final AtomicReference<HystrixConcurrencyStrategy> concurrencyStrategy = new AtomicReference<HystrixConcurrencyStrategy>();
-    /* package */ final AtomicReference<HystrixMetricsPublisher> metricsPublisher = new AtomicReference<HystrixMetricsPublisher>();
+    /* 事件通知对象 */ final AtomicReference<HystrixEventNotifier> notifier = new AtomicReference<HystrixEventNotifier>();
+    /* 并发策略 */ final AtomicReference<HystrixConcurrencyStrategy> concurrencyStrategy = new AtomicReference<HystrixConcurrencyStrategy>();
+    /* 熔断测量发布者 */ final AtomicReference<HystrixMetricsPublisher> metricsPublisher = new AtomicReference<HystrixMetricsPublisher>();
     /* package */ final AtomicReference<HystrixPropertiesStrategy> propertiesFactory = new AtomicReference<HystrixPropertiesStrategy>();
     /* package */ final AtomicReference<HystrixCommandExecutionHook> commandExecutionHook = new AtomicReference<HystrixCommandExecutionHook>();
     private final HystrixDynamicProperties dynamicProperties;

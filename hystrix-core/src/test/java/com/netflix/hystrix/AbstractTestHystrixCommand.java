@@ -17,6 +17,10 @@ package com.netflix.hystrix;
 
 import com.netflix.hystrix.strategy.properties.HystrixPropertiesStrategy;
 
+/**
+ * 执行结果对象
+ * @param <R>
+ */
 public interface AbstractTestHystrixCommand<R> extends HystrixObservable<R>, InspectableBuilder {
 
     enum ExecutionResult {

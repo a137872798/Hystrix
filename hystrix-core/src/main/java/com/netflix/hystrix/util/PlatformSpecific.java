@@ -18,23 +18,48 @@ package com.netflix.hystrix.util;
 import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.ThreadFactory;
 
+/**
+ * 平台相关的特殊属性
+ */
 public class PlatformSpecific {
     private final Platform platform;
 
     private enum Platform {
-        STANDARD, APPENGINE_STANDARD, APPENGINE_FLEXIBLE
+        /**
+         * 标准平台
+         */
+        STANDARD,
+        /**
+         * 标准应用引擎???
+         */
+        APPENGINE_STANDARD,
+        /**
+         * 灵活的应用引擎
+         */
+        APPENGINE_FLEXIBLE
     }
 
     private static PlatformSpecific INSTANCE = new PlatformSpecific();
 
+    /**
+     * 确定当前的平台
+     */
     private PlatformSpecific() {
         platform = determinePlatformReflectively();
     }
 
+    /**
+     * 判断当前环境是否是 标准应用引擎
+     * @return
+     */
     public static boolean isAppEngineStandardEnvironment() {
         return INSTANCE.platform == Platform.APPENGINE_STANDARD;
     }
 
+    /**
+     * 是否是应用引擎  灵活/标准
+     * @return
+     */
     public static boolean isAppEngine() {
         return INSTANCE.platform == Platform.APPENGINE_FLEXIBLE || INSTANCE.platform == Platform.APPENGINE_STANDARD;
     }
@@ -43,12 +68,15 @@ public class PlatformSpecific {
      * This detection mechanism is from Guava - specifically
      * http://docs.guava-libraries.googlecode.com/git/javadoc/src-html/com/google/common/util/concurrent/MoreExecutors.html#line.766
      * Added GAE_LONG_APP_ID check to detect only AppEngine Standard Environment
+     * 确定属于哪种平台
      */
     private static Platform determinePlatformReflectively() {
+        // 没有设置 google的 应用环境变量的话 就是标准环境
         if (System.getProperty("com.google.appengine.runtime.environment") == null) {
             return Platform.STANDARD;
         }
-        // GAE_LONG_APP_ID is only set in the GAE Flexible Environment, where we want standard threading
+
+        // 存在特殊环境变量 就代表是 灵活的应用环境 GAE_LONG_APP_ID is only set in the GAE Flexible Environment, where we want standard threading
         if (System.getenv("GAE_LONG_APP_ID") != null) {
             return Platform.APPENGINE_FLEXIBLE;
         }
@@ -73,9 +101,14 @@ public class PlatformSpecific {
         }
     }
 
+    /**
+     * 返回 应用环境的 特殊线程工厂对象
+     * @return
+     */
     public static ThreadFactory getAppEngineThreadFactory() {
         try {
-            return (ThreadFactory) Class.forName("com.google.appengine.api.ThreadManager")
+            // 通过返回获取 google 的线程工厂对象 先忽视吧
+                return (ThreadFactory) Class.forName("com.google.appengine.api.ThreadManager")
                     .getMethod("currentRequestThreadFactory")
                     .invoke(null);
         } catch (IllegalAccessException e) {

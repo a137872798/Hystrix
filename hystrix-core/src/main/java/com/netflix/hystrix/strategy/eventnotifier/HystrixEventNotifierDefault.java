@@ -18,6 +18,7 @@ package com.netflix.hystrix.strategy.eventnotifier;
 
 /**
  * Default implementations of {@link HystrixEventNotifier} that does nothing.
+ * 默认的监听器对象  这个类有什么意义???
  * 
  * @ExcludeFromJavadoc
  */

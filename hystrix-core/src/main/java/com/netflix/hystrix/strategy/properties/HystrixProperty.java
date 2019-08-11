@@ -25,9 +25,14 @@ import com.netflix.hystrix.strategy.properties.HystrixPropertiesChainedArchaiusP
  * 
  * @param <T>
  *            Type of property value
+ *            熔断器属性接口对象
  */
 public interface HystrixProperty<T> {
 
+    /**
+     * 获取属性值
+     * @return
+     */
     public T get();
 
     /**
@@ -35,6 +40,12 @@ public interface HystrixProperty<T> {
      */
     public static class Factory {
 
+        /**
+         * 将一个普通变量 转换成一个 prop 对象 (就是为该prop 对象实现接口方法并返回了该value)
+         * @param value
+         * @param <T>
+         * @return
+         */
         public static <T> HystrixProperty<T> asProperty(final T value) {
             return new HystrixProperty<T>() {
 
@@ -151,6 +162,7 @@ public interface HystrixProperty<T> {
         }
 
         /**
+         * 从链中获取属性
          * @ExcludeFromJavadoc
          */
         public static <T> HystrixProperty<T> asProperty(final HystrixPropertiesChainedArchaiusProperty.ChainLink<T> chainedProperty) {

@@ -21,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * A key to represent a {@link HystrixCollapser} for monitoring, circuit-breakers, metrics publishing, caching and other such uses.
  * <p>
  * This interface is intended to work natively with Enums so that implementing code can be an enum that implements this interface.
+ * 碰撞相关的key
  */
 public interface HystrixCollapserKey {
 
@@ -37,6 +38,7 @@ public interface HystrixCollapserKey {
         }
 
         // used to intern instances so we don't keep re-creating them millions of times for the same key
+        // 缓存容器
         private static ConcurrentHashMap<String, HystrixCollapserKey> intern = new ConcurrentHashMap<String, HystrixCollapserKey>();
 
         /**
@@ -44,6 +46,7 @@ public interface HystrixCollapserKey {
          * 
          * @param name collapser name
          * @return HystrixCollapserKey instance that is interned (cached) so a given name will always retrieve the same instance.
+         * 首先尝试从容器中获取 没有的话在初始化一个 碰撞对象
          */
         public static HystrixCollapserKey asKey(String name) {
             HystrixCollapserKey k = intern.get(name);

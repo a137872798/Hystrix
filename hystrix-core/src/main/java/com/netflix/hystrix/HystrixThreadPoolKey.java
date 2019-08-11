@@ -21,6 +21,7 @@ import com.netflix.hystrix.util.InternMap;
  * A key to represent a {@link HystrixThreadPool} for monitoring, metrics publishing, caching and other such uses.
  * <p>
  * This interface is intended to work natively with Enums so that implementing code can be an enum that implements this interface.
+ * 线程池键对象 也是实现了 Hystrix  该对象只有一个 name 属性
  */
 public interface HystrixThreadPoolKey extends HystrixKey {
     class Factory {
@@ -31,6 +32,11 @@ public interface HystrixThreadPoolKey extends HystrixKey {
         private static final InternMap<String, HystrixThreadPoolKey> intern
                 = new InternMap<String, HystrixThreadPoolKey>(
                 new InternMap.ValueConstructor<String, HystrixThreadPoolKey>() {
+                    /**
+                     * 通过 key 来生成对应的 value
+                     * @param key
+                     * @return
+                     */
                     @Override
                     public HystrixThreadPoolKey create(String key) {
                         return new HystrixThreadPoolKeyDefault(key);

@@ -34,6 +34,7 @@ import com.netflix.hystrix.strategy.HystrixPlugins;
  * <p>
  * Methods are also invoked synchronously and will add to execution time of the commands so all behavior should be fast. If anything time-consuming is to be done it should be spawned asynchronously
  * onto separate worker threads.
+ * hystrix 的事件通知对象
  */
 public abstract class HystrixEventNotifier {
 
@@ -44,6 +45,7 @@ public abstract class HystrixEventNotifier {
      * 
      * @param eventType event type
      * @param key event key
+     *            标记当前事件 在每个事件执行时会调用 eventType  代表本次 执行结果 可能是 成功/回退 等等   hystrixCommandKey 就是本次的命令键
      */
     public void markEvent(HystrixEventType eventType, HystrixCommandKey key) {
         // do nothing
@@ -64,6 +66,7 @@ public abstract class HystrixEventNotifier {
      *            time in milliseconds of executing <code>run()</code> method
      * @param eventsDuringExecution
      *            {@code List<HystrixEventType>} of events occurred during execution.
+     *            当本次任务执行结束后调用
      */
     public void markCommandExecution(HystrixCommandKey key, ExecutionIsolationStrategy isolationStrategy, int duration, List<HystrixEventType> eventsDuringExecution) {
         // do nothing

@@ -57,52 +57,155 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * 命令对象 骨架类
+ * @param <R>
+ */
+
 /* package */abstract class AbstractCommand<R> implements HystrixInvokableInfo<R>, HystrixObservable<R> {
     private static final Logger logger = LoggerFactory.getLogger(AbstractCommand.class);
+
+    /**
+     * 循环打破器 ???
+     */
     protected final HystrixCircuitBreaker circuitBreaker;
+    /**
+     * hystrix 线程池对象
+     */
     protected final HystrixThreadPool threadPool;
+    /**
+     * 线程池键
+     */
     protected final HystrixThreadPoolKey threadPoolKey;
+    /**
+     * command 相关信息
+     */
     protected final HystrixCommandProperties properties;
 
+    /**
+     * 针对超时状态
+     */
     protected enum TimedOutStatus {
-        NOT_EXECUTED, COMPLETED, TIMED_OUT
+        /**
+         * 未执行
+         */
+        NOT_EXECUTED,
+        /**
+         * 已完成
+         */
+        COMPLETED,
+        /**
+         * 超时
+         */
+        TIMED_OUT
     }
 
+    /**
+     * 当前命令状态
+     */
     protected enum CommandState {
-        NOT_STARTED, OBSERVABLE_CHAIN_CREATED, USER_CODE_EXECUTED, UNSUBSCRIBED, TERMINAL
+        /**
+         * command 未开始
+         */
+        NOT_STARTED,
+        /**
+         * 观察链被创建
+         */
+        OBSERVABLE_CHAIN_CREATED,
+        /**
+         * 用户代码 已执行
+         */
+        USER_CODE_EXECUTED,
+        /**
+         * 未订阅
+         */
+        UNSUBSCRIBED,
+        /**
+         * 结束
+         */
+        TERMINAL
     }
 
+    /**
+     * 当前线程状态
+     */
     protected enum ThreadState {
-        NOT_USING_THREAD, STARTED, UNSUBSCRIBED, TERMINAL
+        /**
+         * 未使用线程池
+         */
+        NOT_USING_THREAD,
+        /**
+         * 开启线程池
+         */
+        STARTED,
+        /**
+         * 还没有订阅者
+         */
+        UNSUBSCRIBED, TERMINAL
     }
 
+    /**
+     * 命令统计对象
+     */
     protected final HystrixCommandMetrics metrics;
 
+    /**
+     * 命令键
+     */
     protected final HystrixCommandKey commandKey;
+    /**
+     * 命令组
+     */
     protected final HystrixCommandGroupKey commandGroup;
 
     /**
      * Plugin implementations
+     * 事件通知对象 用于写入插件
      */
     protected final HystrixEventNotifier eventNotifier;
+    /**
+     * 当前并发策略
+     */
     protected final HystrixConcurrencyStrategy concurrencyStrategy;
+    /**
+     * 命令执行钩子
+     */
     protected final HystrixCommandExecutionHook executionHook;
 
     /* FALLBACK Semaphore */
+    /**
+     * 重试信号量 (回退)
+     */
     protected final TryableSemaphore fallbackSemaphoreOverride;
     /* each circuit has a semaphore to restrict concurrent fallback execution */
+    /**
+     * 每个循环器 有自己的 回退信号量???
+     */
     protected static final ConcurrentHashMap<String, TryableSemaphore> fallbackSemaphorePerCircuit = new ConcurrentHashMap<String, TryableSemaphore>();
     /* END FALLBACK Semaphore */
 
     /* EXECUTION Semaphore */
+    /**
+     * 重试信号量 (正常执行)
+     */
     protected final TryableSemaphore executionSemaphoreOverride;
     /* each circuit has a semaphore to restrict concurrent fallback execution */
     protected static final ConcurrentHashMap<String, TryableSemaphore> executionSemaphorePerCircuit = new ConcurrentHashMap<String, TryableSemaphore>();
     /* END EXECUTION Semaphore */
 
+    /**
+     * 超时监听器对象
+     */
     protected final AtomicReference<Reference<TimerListener>> timeoutTimer = new AtomicReference<Reference<TimerListener>>();
 
+    /**
+     * 命令状态 就是对应 未开始 执行中 等等
+     */
     protected AtomicReference<CommandState> commandState = new AtomicReference<CommandState>(CommandState.NOT_STARTED);
+
+    /**
+     * 线程池状态  未使用线程池 已使用线程池 未订阅 等
+     */
     protected AtomicReference<ThreadState> threadState = new AtomicReference<ThreadState>(ThreadState.NOT_USING_THREAD);
 
     /*
@@ -114,6 +217,7 @@ import java.util.concurrent.atomic.AtomicReference;
      * other commands.
      *
      * Examples: RESPONSE_FROM_CACHE, CANCELLED HystrixEventTypes
+     * 执行结果
      */
     protected volatile ExecutionResult executionResult = ExecutionResult.EMPTY; //state on shared execution
 
@@ -1658,6 +1762,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
     }
 
+    /**
+     * 可重试的信号量
+     */
     /* package */static interface TryableSemaphore {
 
         /**
@@ -1673,6 +1780,7 @@ import java.util.concurrent.atomic.AtomicReference;
          * }
          * }
          * </pre>
+         * 尝试获取信号量的门票
          * 
          * @return boolean
          */
@@ -1691,9 +1799,14 @@ import java.util.concurrent.atomic.AtomicReference;
          * }
          * }
          * </pre>
+         * 释放信号量
          */
         public abstract void release();
 
+        /**
+         * 获取门票数量
+         * @return
+         */
         public abstract int getNumberOfPermitsUsed();
 
     }
@@ -1714,11 +1827,16 @@ import java.util.concurrent.atomic.AtomicReference;
      * If multiple command instances in the same request scope match keys then only the first will be executed and all others returned from cache.
      * 
      * @return cacheKey
+     * 获取缓存键
      */
     protected String getCacheKey() {
         return null;
     }
 
+    /**
+     * 获取公共缓存键
+     * @return
+     */
     public String getPublicCacheKey() {
         return getCacheKey();
     }

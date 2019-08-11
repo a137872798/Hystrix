@@ -53,6 +53,7 @@ import org.slf4j.LoggerFactory;
  * 
  * @ExcludeFromJavadoc
  * @ThreadSafe
+ * 默认的请求变量  该类对于用户来说 就是一个 模子 需要子类去修改核心方法
  */
 public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<T> {
     static final Logger logger = LoggerFactory.getLogger(HystrixRequestVariableDefault.class);
@@ -69,17 +70,22 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
      * 
      * @return the value of the variable for the current request,
      *         or null if no value has been set and there is no initial value
+     *         获取当前上下文中保存的值
      */
     @SuppressWarnings("unchecked")
     public T get() {
+        // 获取当前线程的上下文对象 如果为空 抛出异常
         if (HystrixRequestContext.getContextForCurrentThread() == null) {
             throw new IllegalStateException(HystrixRequestContext.class.getSimpleName() + ".initializeContext() must be called at the beginning of each request before RequestVariable functionality can be used.");
         }
+        // 获取当前上下文对象保存的容器
         ConcurrentHashMap<HystrixRequestVariableDefault<?>, LazyInitializer<?>> variableMap = HystrixRequestContext.getContextForCurrentThread().state;
 
         // short-circuit the synchronized path below if we already have the value in the ConcurrentHashMap
+        // 从本线程绑定的上下文对象通过自身获取对应的 延迟初始化对象
         LazyInitializer<?> v = variableMap.get(this);
         if (v != null) {
+            // 延迟加载对象
             return (T) v.get();
         }
 
@@ -92,17 +98,20 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
          * 
          * Whichever instance of LazyInitializer succeeds will then have get() invoked which will call
          * the initialValue() method once-and-only-once.
+         * 如果没有获取对应的 value 就代表需要重新生成 lazy 初始化对象 并设置
          */
         LazyInitializer<T> l = new LazyInitializer<T>(this);
         LazyInitializer<?> existing = variableMap.putIfAbsent(this, l);
         if (existing == null) {
             /*
              * We won the thread-race so can use 'l' that we just created.
+             * 主动触发 使得延迟初始化对象能够返回需要的值
              */
             return l.get();
         } else {
             /*
              * We lost the thread-race so let 'l' be garbage collected and instead return 'existing'
+             * 代表被并发设置了 这里返回需要的值
              */
             return (T) existing.get();
         }
@@ -117,6 +126,7 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
      * The default implementation returns null.
      * 
      * @return initial value of the HystrixRequestVariable to use for the instance being constructed
+     * 这里进行初始化时 并不会生成对象  而 lazyInit 对象实际就是委托该方法
      */
     public T initialValue() {
         return null;
@@ -130,6 +140,7 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
      * 
      * @param value
      *            the value to set
+     *            将传入的 值 绑定到 上下文对应的容器对象中  注意这里的 lazyInit 是由 本对象和 value 组成的
      */
     public void set(T value) {
         HystrixRequestContext.getContextForCurrentThread().state.put(this, new LazyInitializer<T>(this, value));
@@ -141,6 +152,7 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
      * This will invoke {@link #shutdown} if implemented.
      * <p>
      * If the value is subsequently fetched in the thread, the {@link #initialValue} method will be called again.
+     * 从当前线程中 移除自身  应该就是从对应的上下文对象中 将自身关联的键值对从容器中移除
      */
     public void remove() {
         if (HystrixRequestContext.getContextForCurrentThread() != null) {
@@ -154,6 +166,7 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
         LazyInitializer<?> o = context.state.remove(v);
         if (o != null) {
             // this thread removed it so let's execute shutdown
+            // 如果对象已经被初始化 就要 调用 shutdown 关闭它
             v.shutdown((T) o.get());
         }
     }
@@ -170,6 +183,7 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
      * 
      * @param value
      *            the value of the HystrixRequestVariable being removed
+     *            默认情况下 shutdown是空实现
      */
     public void shutdown(T value) {
         // do nothing by default
@@ -183,9 +197,13 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
      * ConcurrentHashMap.putIfAbsent and allow "losers" in a thread-race to be discarded.
      * 
      * @param <T>
+     *     延迟初始化对象
      */
     /* package */static final class LazyInitializer<T> {
         // @GuardedBy("synchronization on get() or construction")
+        /**
+         * 对应要生成/维护的值
+         */
         private T value;
 
         /*
@@ -193,10 +211,20 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
          * a null check in case initialValue() returns null
          */
         // @GuardedBy("synchronization on get() or construction")
+        /**
+         * 默认情况下 还没有初始化
+         */
         private boolean initialized = false;
 
+        /**
+         * 该对象内部 维护了 关联的 requestVariableDefault 对象
+         */
         private final HystrixRequestVariableDefault<T> rv;
 
+        /**
+         * 这种初始化方式 就是还没有 生成value  且对应的 标识 还是false
+         * @param rv
+         */
         private LazyInitializer(HystrixRequestVariableDefault<T> rv) {
             this.rv = rv;
         }
@@ -207,6 +235,10 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
             this.initialized = true;
         }
 
+        /**
+         * 延迟初始化  就是调用 variableDefault 的 initialValue
+         * @return
+         */
         public synchronized T get() {
             if (!initialized) {
                 value = rv.initialValue();

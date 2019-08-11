@@ -19,6 +19,7 @@ package com.netflix.hystrix.strategy.concurrency;
  * Interface for lifecycle methods that are then executed by an implementation of {@link HystrixRequestVariable}.
  * 
  * @param <T>
+ *     请求变量生命周期对象
  */
 public interface HystrixRequestVariableLifecycle<T> {
 
@@ -28,6 +29,7 @@ public interface HystrixRequestVariableLifecycle<T> {
      * When using the default implementation this is invoked when {@link HystrixRequestVariableDefault#get()} is called.
      * 
      * @return T with initial value or null if none.
+     * 初始化
      */
     public T initialValue();
 
@@ -42,6 +44,7 @@ public interface HystrixRequestVariableLifecycle<T> {
      *            of request variable to allow cleanup activity.
      *            <p>
      *            If nothing needs to be cleaned up then nothing needs to be done in this method.
+     *            根据传入的值进行终止 应该是 完成一些清理工作
      */
     public void shutdown(T value);
 

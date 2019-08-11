@@ -28,18 +28,49 @@ import java.util.List;
  * <p>
  * This being immutable forces and ensure thread-safety instead of using AtomicInteger/ConcurrentLinkedQueue and determining
  * when it's safe to mutate the object directly versus needing to deep-copy clone to a new instance.
+ * hystrix 的执行结果对象  内部维护了 各种执行时相关的 参数 或者异常对象
  */
 public class ExecutionResult {
+    /**
+     * 事件计数器 ???
+     */
     private final EventCounts eventCounts;
+    /**
+     * 失败后的异常
+     */
     private final Exception failedExecutionException;
+    /**
+     * 执行时出现的异常
+     */
     private final Exception executionException;
+    /**
+     * 起始时间戳
+     */
     private final long startTimestamp;
+    /**
+     * 执行的延迟时间
+     */
     private final int executionLatency; //time spent in run() method
+    /**
+     * 用户线程延迟 ???
+     */
     private final int userThreadLatency; //time elapsed between caller thread submitting request and response being visible to it
+    /**
+     * 是否正常执行 ???
+     */
     private final boolean executionOccurred;
+    /**
+     * 是否在线程中被执行
+     */
     private final boolean isExecutedInThread;
+    /**
+     * 碰撞key
+     */
     private final HystrixCollapserKey collapserKey;
 
+    /**
+     * 这里存放了所有的事件类型
+     */
     private static final HystrixEventType[] ALL_EVENT_TYPES = HystrixEventType.values();
     private static final int NUM_EVENT_TYPES = ALL_EVENT_TYPES.length;
     private static final BitSet EXCEPTION_PRODUCING_EVENTS = new BitSet(NUM_EVENT_TYPES);
@@ -55,13 +86,29 @@ public class ExecutionResult {
         }
     }
 
+    /**
+     * 事件计数器
+     */
     public static class EventCounts {
+        /**
+         * 一个 set 对象 每个元素都是一个 bit
+         */
         private final BitSet events;
+        /**
+         * 发行数量 ???
+         */
         private final int numEmissions;
+        /**
+         * 回退发行数量
+         */
         private final int numFallbackEmissions;
+        /**
+         * 碰撞数量
+         */
         private final int numCollapsed;
 
         EventCounts() {
+            // 允许存放的数量
             this.events = new BitSet(NUM_EVENT_TYPES);
             this.numEmissions = 0;
             this.numFallbackEmissions = 0;
