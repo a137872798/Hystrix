@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
  * The pool should be sized large enough to handle normal healthy traffic but small enough that it will constrain concurrent execution if backend calls become latent.
  * <p>
  * For more information see the Github Wiki: https://github.com/Netflix/Hystrix/wiki/Configuration#wiki-ThreadPool and https://github.com/Netflix/Hystrix/wiki/How-it-Works#wiki-Isolation
+ * hystrix 内部维护的线程池对象
  */
 public interface HystrixThreadPool {
 
@@ -50,25 +51,37 @@ public interface HystrixThreadPool {
      * Implementation of {@link ThreadPoolExecutor}.
      *
      * @return ThreadPoolExecutor
+     * 获取线程池对象
      */
     public ExecutorService getExecutor();
 
+    /**
+     * 获取定时器对象
+     */
     public Scheduler getScheduler();
 
+    /**
+     * 获取定时器对象 传入一个 回调对象
+     * @param shouldInterruptThread
+     * @return
+     */
     public Scheduler getScheduler(Func0<Boolean> shouldInterruptThread);
 
     /**
      * Mark when a thread begins executing a command.
+     * 当线程开始执行command 时 标记 本线程
      */
     public void markThreadExecution();
 
     /**
      * Mark when a thread completes executing a command.
+     * 当线程完成command 时 标记本线程
      */
     public void markThreadCompletion();
 
     /**
      * Mark when a command gets rejected from the threadpool
+     * 当command 尝试获取线程被拒绝时 标记线程
      */
     public void markThreadRejection();
 
@@ -79,16 +92,19 @@ public interface HystrixThreadPool {
      * restart to adjust when commands should be rejected from queuing up.
      *
      * @return boolean whether there is space on the queue
+     * 当前队列是否还有可用空间
      */
     public boolean isQueueSpaceAvailable();
 
     /**
+     * 工厂对象
      * @ExcludeFromJavadoc
      */
     /* package */static class Factory {
         /*
          * Use the String from HystrixThreadPoolKey.name() instead of the HystrixThreadPoolKey instance as it's just an interface and we can't ensure the object
          * we receive implements hashcode/equals correctly and do not want the default hashcode/equals which would create a new threadpool for every object we get even if the name is the same
+         * factory 是 对应hystrix 的线程池工厂内部维护了  key 和 线程池对象的映射关系
          */
         /* package */final static ConcurrentHashMap<String, HystrixThreadPool> threadPools = new ConcurrentHashMap<String, HystrixThreadPool>();
 
@@ -98,20 +114,25 @@ public interface HystrixThreadPool {
          * This is thread-safe and ensures only 1 {@link HystrixThreadPool} per {@link HystrixThreadPoolKey}.
          *
          * @return {@link HystrixThreadPool} instance
+         * 获取实例对象 HystrixThreadPoolKey 只有一个name 属性  HystrixThreadPoolProperties 是对应到 hystrix线程池对象的属性
          */
         /* package */static HystrixThreadPool getInstance(HystrixThreadPoolKey threadPoolKey, HystrixThreadPoolProperties.Setter propertiesBuilder) {
             // get the key to use instead of using the object itself so that if people forget to implement equals/hashcode things will still work
+            // 获取线程池的键
             String key = threadPoolKey.name();
 
             // this should find it for all but the first time
+            // 从容器中获取 对应的 线程池对象
             HystrixThreadPool previouslyCached = threadPools.get(key);
             if (previouslyCached != null) {
+                // 对象已经被缓存 就直接返回
                 return previouslyCached;
             }
 
             // if we get here this is the first time so we need to initialize
             synchronized (HystrixThreadPool.class) {
                 if (!threadPools.containsKey(key)) {
+                    // 使用内置锁 保证并发安全  并生成一个新的 线程池对象
                     threadPools.put(key, new HystrixThreadPoolDefault(threadPoolKey, propertiesBuilder));
                 }
             }
@@ -124,6 +145,7 @@ public interface HystrixThreadPool {
          * NOTE: This is NOT thread-safe if HystrixCommands are concurrently being executed
          * and causing thread-pools to initialize while also trying to shutdown.
          * </p>
+         * 终止每个线程池对象 并清空缓存
          */
         /* package */static synchronized void shutdown() {
             for (HystrixThreadPool pool : threadPools.values()) {
@@ -137,12 +159,14 @@ public interface HystrixThreadPool {
          * <p>
          * NOTE: This is NOT thread-safe if HystrixCommands are concurrently being executed
          * and causing thread-pools to initialize while also trying to shutdown.
+         * 终止线程池对象
          * </p>
          */
         /* package */static synchronized void shutdown(long timeout, TimeUnit unit) {
             for (HystrixThreadPool pool : threadPools.values()) {
                 pool.getExecutor().shutdown();
             }
+            // 在指定时限内 关闭所有线程池
             for (HystrixThreadPool pool : threadPools.values()) {
                 try {
                     while (! pool.getExecutor().awaitTermination(timeout, unit)) {
@@ -156,14 +180,24 @@ public interface HystrixThreadPool {
     }
 
     /**
+     * hystrix  默认的线程池对象
      * @ExcludeFromJavadoc
      * @ThreadSafe
      */
     /* package */static class HystrixThreadPoolDefault implements HystrixThreadPool {
         private static final Logger logger = LoggerFactory.getLogger(HystrixThreadPoolDefault.class);
 
+        /**
+         * 线程池相关属性
+         */
         private final HystrixThreadPoolProperties properties;
+        /**
+         * 任务队列
+         */
         private final BlockingQueue<Runnable> queue;
+        /**
+         * 线程池对象
+         */
         private final ThreadPoolExecutor threadPool;
         private final HystrixThreadPoolMetrics metrics;
         private final int queueSize;

@@ -35,6 +35,7 @@ import java.util.List;
  * Base class for hystrix commands.
  *
  * @param <T> the return type
+ *           看来该类就是 hystrix 的核心了
  */
 @ThreadSafe
 public abstract class AbstractHystrixCommand<T> extends com.netflix.hystrix.HystrixCommand<T> {

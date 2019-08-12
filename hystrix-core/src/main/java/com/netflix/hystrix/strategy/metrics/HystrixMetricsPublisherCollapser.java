@@ -26,6 +26,7 @@ import com.netflix.hystrix.HystrixCollapser;
  * <p>
  * Doing this logic in the constructor could result in memory leaks, double-publishing and other such behavior because this can be optimistically constructed more than once and "extras" discarded with
  * only one actually having <code>initialize()</code> called on it.
+ * 碰撞发布接口
  */
 public interface HystrixMetricsPublisherCollapser {
 

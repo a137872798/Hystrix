@@ -24,13 +24,109 @@ import com.netflix.hystrix.strategy.properties.HystrixPropertiesStrategy;
 public interface AbstractTestHystrixCommand<R> extends HystrixObservable<R>, InspectableBuilder {
 
     enum ExecutionResult {
-        SUCCESS, FAILURE, ASYNC_FAILURE, HYSTRIX_FAILURE, NOT_WRAPPED_FAILURE, ASYNC_HYSTRIX_FAILURE, RECOVERABLE_ERROR, ASYNC_RECOVERABLE_ERROR, UNRECOVERABLE_ERROR, ASYNC_UNRECOVERABLE_ERROR, BAD_REQUEST, ASYNC_BAD_REQUEST, BAD_REQUEST_NOT_WRAPPED, MULTIPLE_EMITS_THEN_SUCCESS, MULTIPLE_EMITS_THEN_FAILURE, NO_EMITS_THEN_SUCCESS
+        /**
+         * 执行成功
+         */
+        SUCCESS,
+        /**
+         * 失败
+         */
+        FAILURE,
+        /**
+         * 异步失败
+         */
+        ASYNC_FAILURE,
+        /**
+         * 熔断失败
+         */
+        HYSTRIX_FAILURE,
+        /**
+         * 未包装失败
+         */
+        NOT_WRAPPED_FAILURE,
+        /**
+         * 异步熔断失败
+         */
+        ASYNC_HYSTRIX_FAILURE,
+        /**
+         * 恢复错误
+         */
+        RECOVERABLE_ERROR,
+        /**
+         * 异步恢复错误
+         */
+        ASYNC_RECOVERABLE_ERROR,
+        /**
+         * 非恢复错误
+         */
+        UNRECOVERABLE_ERROR,
+        /**
+         * 异步非恢复错误
+         */
+        ASYNC_UNRECOVERABLE_ERROR,
+        /**
+         * 坏请求
+         */
+        BAD_REQUEST,
+        /**
+         * 异步坏请求
+         */
+        ASYNC_BAD_REQUEST,
+        /**
+         * 未包装的坏请求
+         */
+        BAD_REQUEST_NOT_WRAPPED,
+        /**
+         * 多重发出之后成功 ???
+         */
+        MULTIPLE_EMITS_THEN_SUCCESS,
+        /**
+         * 多重发出之后失败 ???
+         */
+        MULTIPLE_EMITS_THEN_FAILURE,
+        /**
+         * 未发出 之后成功
+         */
+        NO_EMITS_THEN_SUCCESS
     }
 
+    /**
+     * 回退结果
+     */
     enum FallbackResult {
-        UNIMPLEMENTED, SUCCESS, FAILURE, ASYNC_FAILURE, MULTIPLE_EMITS_THEN_SUCCESS, MULTIPLE_EMITS_THEN_FAILURE, NO_EMITS_THEN_SUCCESS
+        /**
+         * 未实现???
+         */
+        UNIMPLEMENTED,
+        /**
+         * 成功
+         */
+        SUCCESS,
+        /**
+         * 失败
+         */
+        FAILURE,
+        /**
+         * 异步失败
+         */
+        ASYNC_FAILURE,
+        /**
+         * 多重发出后成功???
+         */
+        MULTIPLE_EMITS_THEN_SUCCESS,
+        /**
+         * 多重发出后失败???
+         */
+        MULTIPLE_EMITS_THEN_FAILURE,
+        /**
+         * 没有发出???
+         */
+        NO_EMITS_THEN_SUCCESS
     }
 
+    /**
+     * 能否被缓存
+     */
     enum CacheEnabled {
         YES, NO
     }

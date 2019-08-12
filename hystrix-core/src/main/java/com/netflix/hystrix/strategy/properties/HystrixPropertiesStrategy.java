@@ -32,6 +32,7 @@ import com.netflix.hystrix.strategy.HystrixPlugins;
  * <p>
  * See {@link HystrixPlugins} or the Hystrix GitHub Wiki for information on configuring plugins: <a
  * href="https://github.com/Netflix/Hystrix/wiki/Plugins">https://github.com/Netflix/Hystrix/wiki/Plugins</a>.
+ * hystrix 的 属性策略
  */
 public abstract class HystrixPropertiesStrategy {
 
@@ -49,6 +50,7 @@ public abstract class HystrixPropertiesStrategy {
      *            <p>
      *            The builder will return NULL for each value if no override was provided.
      * @return Implementation of {@link HystrixCommandProperties}
+     * 通过命令键 和 setter 对象(就是封装了一些简单的 set/get 方法)生成默认的command 对象
      */
     public HystrixCommandProperties getCommandProperties(HystrixCommandKey commandKey, HystrixCommandProperties.Setter builder) {
         return new HystrixPropertiesCommandDefault(commandKey, builder);
@@ -68,6 +70,7 @@ public abstract class HystrixPropertiesStrategy {
      * @param commandKey command key used in determining command's cache key
      * @param builder builder for {@link HystrixCommandProperties} used in determining command's cache key
      * @return String value to be used as the cache key of a {@link HystrixCommandProperties} implementation.
+     * 获取命令键的名字
      */
     public String getCommandPropertiesCacheKey(HystrixCommandKey commandKey, HystrixCommandProperties.Setter builder) {
         return commandKey.name();
@@ -88,6 +91,7 @@ public abstract class HystrixPropertiesStrategy {
      *            The builder will return NULL for each value if no override was provided.
      * 
      * @return Implementation of {@link HystrixThreadPoolProperties}
+     * 获取线程相关的属性  setter 为专门封装线程相关属性的 的对象  生成的对象 以setter 中设置的 属性为主
      */
     public HystrixThreadPoolProperties getThreadPoolProperties(HystrixThreadPoolKey threadPoolKey, HystrixThreadPoolProperties.Setter builder) {
         return new HystrixPropertiesThreadPoolDefault(threadPoolKey, builder);
@@ -127,6 +131,7 @@ public abstract class HystrixPropertiesStrategy {
      *            The builder will return NULL for each value if no override was provided.
      * 
      * @return Implementation of {@link HystrixCollapserProperties}
+     * 生成碰撞属性对象
      */
     public HystrixCollapserProperties getCollapserProperties(HystrixCollapserKey collapserKey, HystrixCollapserProperties.Setter builder) {
         return new HystrixPropertiesCollapserDefault(collapserKey, builder);
@@ -146,6 +151,7 @@ public abstract class HystrixPropertiesStrategy {
      * @param collapserKey collapser key used in determining collapser's cache key
      * @param builder builder for {@link HystrixCollapserProperties} used in determining collapser's cache key
      * @return String value to be used as the cache key of a {@link HystrixCollapserProperties} implementation.
+     * 获取传入的碰撞 key 的name 属性
      */
     public String getCollapserPropertiesCacheKey(HystrixCollapserKey collapserKey, HystrixCollapserProperties.Setter builder) {
         return collapserKey.name();
@@ -159,6 +165,7 @@ public abstract class HystrixPropertiesStrategy {
      *
      *
      * @return Implementation of {@link com.netflix.hystrix.HystrixTimerThreadPoolProperties}
+     * 获取定时线程池的name 属性
      */
     public HystrixTimerThreadPoolProperties getTimerThreadPoolProperties() {
         return new HystrixPropertiesTimerThreadPoolDefault();

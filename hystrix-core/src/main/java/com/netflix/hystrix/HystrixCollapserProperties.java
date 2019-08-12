@@ -28,6 +28,7 @@ import com.netflix.hystrix.util.HystrixRollingPercentile;
  * Properties for instances of {@link HystrixCollapser}.
  * <p>
  * Default implementation of methods uses Archaius (https://github.com/Netflix/archaius)
+ * 碰撞相关的属性对象
  */
 public abstract class HystrixCollapserProperties {
 
@@ -52,6 +53,10 @@ public abstract class HystrixCollapserProperties {
     private final HystrixProperty<Integer> metricsRollingPercentileWindowBuckets; // number of buckets percentileWindow will be divided into
     private final HystrixProperty<Integer> metricsRollingPercentileBucketSize; // how many values will be stored in each percentileWindowBucket
 
+    /**
+     * 传入指定的 collapserKey 生成 collapserProp 对象
+     * @param collapserKey
+     */
     protected HystrixCollapserProperties(HystrixCollapserKey collapserKey) {
         this(collapserKey, new Setter(), "hystrix");
     }
@@ -60,6 +65,9 @@ public abstract class HystrixCollapserProperties {
         this(collapserKey, builder, "hystrix");
     }
 
+    /**
+     * 通过 key builder 和前缀来初始化 碰撞键对象
+     */
     protected HystrixCollapserProperties(HystrixCollapserKey key, Setter builder, String propertyPrefix) {
         this.maxRequestsInBatch = getProperty(propertyPrefix, key, "maxRequestsInBatch", builder.getMaxRequestsInBatch(), default_maxRequestsInBatch);
         this.timerDelayInMilliseconds = getProperty(propertyPrefix, key, "timerDelayInMilliseconds", builder.getTimerDelayInMilliseconds(), default_timerDelayInMilliseconds);
@@ -72,8 +80,13 @@ public abstract class HystrixCollapserProperties {
         this.metricsRollingPercentileBucketSize = getProperty(propertyPrefix, key, "metrics.rollingPercentile.bucketSize", builder.getMetricsRollingPercentileBucketSize(), default_metricsRollingPercentileBucketSize);
     }
 
+    /**
+     * 获取属性值
+     */
     private static HystrixProperty<Integer> getProperty(String propertyPrefix, HystrixCollapserKey key, String instanceProperty, Integer builderOverrideValue, Integer defaultValue) {
+        // forInteger() 方法本身会返回一个chain 对象 该对象内部包装了一个 链表结构 调用 add() 方法就是往 内部的 propList 填充属性
         return forInteger()
+                // 第一个参数为 propKey  第二个参数 value 为具体的数值
               .add(propertyPrefix + ".collapser." + key.name() + "." + instanceProperty, builderOverrideValue)
               .add(propertyPrefix + ".collapser.default." + instanceProperty, defaultValue)
               .build();

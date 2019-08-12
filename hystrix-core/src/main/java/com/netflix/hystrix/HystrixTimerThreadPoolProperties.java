@@ -9,11 +9,18 @@ import com.netflix.hystrix.strategy.properties.HystrixProperty;
  * Properties for Hystrix timer thread pool.
  * <p>
  * Default implementation of methods uses Archaius (https://github.com/Netflix/archaius)
+ * hystrix 定时线程池 的相关配置
  */
 public abstract class HystrixTimerThreadPoolProperties {
 
+    /**
+     * 核心线程数
+     */
     private final HystrixProperty<Integer> corePoolSize;
 
+    /**
+     * 初始化时 使用cpu核数 作为coreSize
+     */
     protected HystrixTimerThreadPoolProperties() {
         this(new Setter().withCoreSize(Runtime.getRuntime().availableProcessors()));
     }

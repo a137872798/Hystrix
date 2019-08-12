@@ -28,6 +28,7 @@ import com.netflix.hystrix.exception.HystrixRuntimeException;
  * Common interface for executables ({@link HystrixCommand} and {@link HystrixCollapser}) so client code can treat them the same and combine in typed collections if desired.
  * 
  * @param <R>
+ *     hystrix 的执行对象
  */
 public interface HystrixExecutable<R> extends HystrixInvokable<R> {
 
@@ -40,6 +41,7 @@ public interface HystrixExecutable<R> extends HystrixInvokable<R> {
      *             if an error occurs and a fallback cannot be retrieved
      * @throws HystrixBadRequestException
      *             if the {@link HystrixCommand} instance considers request arguments to be invalid and needs to throw an error that does not represent a system failure
+     *             执行并生成结果对象
      */
     public R execute();
 
@@ -57,6 +59,7 @@ public interface HystrixExecutable<R> extends HystrixInvokable<R> {
      *             if an error occurs and a fallback cannot be retrieved
      * @throws HystrixBadRequestException
      *             if the {@link HystrixCommand} instance considers request arguments to be invalid and needs to throw an error that does not represent a system failure
+     *             异步执行操作 将任务 弹入队列
      */
     public Future<R> queue();
 
@@ -87,6 +90,7 @@ public interface HystrixExecutable<R> extends HystrixInvokable<R> {
      *             via {@code Observer#onError} if invalid arguments or state were used representing a user failure, not a system failure
      * @throws IllegalStateException
      *             if invoked more than once
+     *             获取观察者
      */
     public Observable<R> observe();
 

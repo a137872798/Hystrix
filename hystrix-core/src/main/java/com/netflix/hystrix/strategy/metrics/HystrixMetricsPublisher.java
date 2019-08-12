@@ -38,12 +38,15 @@ import com.netflix.hystrix.strategy.HystrixPlugins;
  * <p>
  * See {@link HystrixPlugins} or the Hystrix GitHub Wiki for information on configuring plugins: <a
  * href="https://github.com/Netflix/Hystrix/wiki/Plugins">https://github.com/Netflix/Hystrix/wiki/Plugins</a>.
+ * 测量发布者???
  */
 public abstract class HystrixMetricsPublisher {
 
     // TODO should this have cacheKey functionality like HystrixProperties does?
     // I think we do otherwise dynamically provided owner and properties won't work
     // a custom override would need the caching strategy for properties/publisher/owner etc to be in sync
+
+    // 下面这些 以 Default 结尾的对象 只是 增加了获取单例对象的方法 没有实质逻辑 都是noop
 
     /**
      * Construct an implementation of {@link HystrixMetricsPublisherCommand} for {@link HystrixCommand} instances having key {@link HystrixCommandKey}.
@@ -65,6 +68,7 @@ public abstract class HystrixMetricsPublisher {
      * @param properties
      *            {@link HystrixCommandProperties} instance for {@link HystrixCommand} instances having the key as defined by {@link HystrixCommandKey}
      * @return instance of {@link HystrixMetricsPublisherCommand} that will have its <code>initialize</code> method invoked once.
+     * 获取默认的测量发布对象
      */
     public HystrixMetricsPublisherCommand getMetricsPublisherForCommand(HystrixCommandKey commandKey, HystrixCommandGroupKey commandGroupKey, HystrixCommandMetrics metrics, HystrixCircuitBreaker circuitBreaker, HystrixCommandProperties properties) {
         return new HystrixMetricsPublisherCommandDefault(commandKey, commandGroupKey, metrics, circuitBreaker, properties);
@@ -86,6 +90,7 @@ public abstract class HystrixMetricsPublisher {
      * @param properties
      *            {@link HystrixThreadPoolProperties} instance for the {@link HystrixThreadPool} instance having the key as defined by {@link HystrixThreadPoolKey}
      * @return instance of {@link HystrixMetricsPublisherThreadPool} that will have its <code>initialize</code> method invoked once.
+     * 获取线程池发布测量对象
      */
     public HystrixMetricsPublisherThreadPool getMetricsPublisherForThreadPool(HystrixThreadPoolKey threadPoolKey, HystrixThreadPoolMetrics metrics, HystrixThreadPoolProperties properties) {
         return new HystrixMetricsPublisherThreadPoolDefault(threadPoolKey, metrics, properties);
@@ -107,6 +112,7 @@ public abstract class HystrixMetricsPublisher {
      * @param properties
      *            {@link HystrixCollapserProperties} instance for the {@link HystrixCollapser} instance having the key as defined by {@link HystrixCollapserKey}
      * @return instance of {@link HystrixMetricsPublisherCollapser} that will have its <code>initialize</code> method invoked once.
+     * 获取碰撞发布测量对象
      */
     public HystrixMetricsPublisherCollapser getMetricsPublisherForCollapser(HystrixCollapserKey collapserKey, HystrixCollapserMetrics metrics, HystrixCollapserProperties properties) {
         return new HystrixMetricsPublisherCollapserDefault(collapserKey, metrics, properties);

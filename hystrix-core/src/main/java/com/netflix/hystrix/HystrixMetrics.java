@@ -20,6 +20,7 @@ import com.netflix.hystrix.util.HystrixRollingNumberEvent;
 
 /**
  * Abstract base class for Hystrix metrics
+ * hystrix 的测量对象
  */
 public abstract class HystrixMetrics {
 

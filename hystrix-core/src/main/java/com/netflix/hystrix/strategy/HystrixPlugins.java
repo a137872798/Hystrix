@@ -68,16 +68,25 @@ public class HystrixPlugins {
     /* 事件通知对象 */ final AtomicReference<HystrixEventNotifier> notifier = new AtomicReference<HystrixEventNotifier>();
     /* 并发策略 */ final AtomicReference<HystrixConcurrencyStrategy> concurrencyStrategy = new AtomicReference<HystrixConcurrencyStrategy>();
     /* 熔断测量发布者 */ final AtomicReference<HystrixMetricsPublisher> metricsPublisher = new AtomicReference<HystrixMetricsPublisher>();
-    /* package */ final AtomicReference<HystrixPropertiesStrategy> propertiesFactory = new AtomicReference<HystrixPropertiesStrategy>();
-    /* package */ final AtomicReference<HystrixCommandExecutionHook> commandExecutionHook = new AtomicReference<HystrixCommandExecutionHook>();
+    /* 就是维护了一些可以获取属性的方法 */ final AtomicReference<HystrixPropertiesStrategy> propertiesFactory = new AtomicReference<HystrixPropertiesStrategy>();
+    /* 钩子对象 */ final AtomicReference<HystrixCommandExecutionHook> commandExecutionHook = new AtomicReference<HystrixCommandExecutionHook>();
+    /**
+     * 该接口 基于 SystemProp 的实现就是去环境变量中获取需要的属性
+     */
     private final HystrixDynamicProperties dynamicProperties;
 
-    
+    /**
+     * 创建插件对象
+     * @param classLoader
+     * @param logSupplier
+     */
     private HystrixPlugins(ClassLoader classLoader, LoggerSupplier logSupplier) {
         //This will load Archaius if its in the classpath.
+        // 设置 classLoader
         this.classLoader = classLoader;
         //N.B. Do not use a logger before this is loaded as it will most likely load the configuration system.
         //The configuration system may need to do something prior to loading logging. @agentgt
+        // 解析动态属性
         dynamicProperties = resolveDynamicProperties(classLoader, logSupplier);
     }
 
@@ -94,6 +103,7 @@ public class HystrixPlugins {
      * @ExcludeFromJavadoc
      */
     /* private */ static HystrixPlugins create(ClassLoader classLoader) {
+        // 创建一个插件对象
         return new HystrixPlugins(classLoader, new LoggerSupplier() {
             @Override
             public Logger getLogger() {
@@ -102,6 +112,7 @@ public class HystrixPlugins {
         });
     }
     /**
+     * 创建一个熔断插件对象
      * @ExcludeFromJavadoc
      */
     /* private */ static HystrixPlugins create() {
@@ -114,6 +125,7 @@ public class HystrixPlugins {
 
     /**
      * Reset all of the HystrixPlugins to null.  You may invoke this directly, or it also gets invoked via <code>Hystrix.reset()</code>
+     * 重置 就是将维护的各个原子引用置空
      */
     public static void reset() {
         getInstance().notifier.set(null);
@@ -131,10 +143,13 @@ public class HystrixPlugins {
      * load.
      * 
      * @return {@link HystrixEventNotifier} implementation to use
+     * 获取事件通知器对象
      */
     public HystrixEventNotifier getEventNotifier() {
+        // 当通知器对象还没有生成的时候
         if (notifier.get() == null) {
             // check for an implementation from Archaius first
+            // 应该是从某个地方寻找该抽象类的全部实现类
             Object impl = getPluginImplementation(HystrixEventNotifier.class);
             if (impl == null) {
                 // nothing set via Archaius so initialize with default
@@ -155,6 +170,7 @@ public class HystrixPlugins {
      *            {@link HystrixEventNotifier} implementation
      * @throws IllegalStateException
      *             if called more than once or after the default was initialized (if usage occurs before trying to register)
+     *             注册事件监听器 如果 CAS 操作失败 提示被其他线程抢占注册
      */
     public void registerEventNotifier(HystrixEventNotifier impl) {
         if (!notifier.compareAndSet(null, impl)) {
@@ -169,6 +185,7 @@ public class HystrixPlugins {
      * full classname to load.
      * 
      * @return {@link HystrixConcurrencyStrategy} implementation to use
+     * 获取并发策略  内部就是跟线程池相关的属性
      */
     public HystrixConcurrencyStrategy getConcurrencyStrategy() {
         if (concurrencyStrategy.get() == null) {
@@ -193,6 +210,7 @@ public class HystrixPlugins {
      *            {@link HystrixConcurrencyStrategy} implementation
      * @throws IllegalStateException
      *             if called more than once or after the default was initialized (if usage occurs before trying to register)
+     *             设置当前并发策略
      */
     public void registerConcurrencyStrategy(HystrixConcurrencyStrategy impl) {
         if (!concurrencyStrategy.compareAndSet(null, impl)) {
@@ -207,6 +225,7 @@ public class HystrixPlugins {
      * classname to load.
      * 
      * @return {@link HystrixMetricsPublisher} implementation to use
+     * 获取测量工具
      */
     public HystrixMetricsPublisher getMetricsPublisher() {
         if (metricsPublisher.get() == null) {
@@ -245,6 +264,7 @@ public class HystrixPlugins {
      * classname to load.
      * 
      * @return {@link HystrixPropertiesStrategy} implementation to use
+     * 设置 属性策略对象
      */
     public HystrixPropertiesStrategy getPropertiesStrategy() {
         if (propertiesFactory.get() == null) {
@@ -276,6 +296,7 @@ public class HystrixPlugins {
      * <li>A fallback implementation based on the {@link System#getProperties()}</li>
      * </ol>
      * @return never <code>null</code>
+     * 获取动态属性对象
      */
     public HystrixDynamicProperties getDynamicProperties() {
         return dynamicProperties;
@@ -305,6 +326,7 @@ public class HystrixPlugins {
      * @return {@link HystrixCommandExecutionHook} implementation to use
      * 
      * @since 1.2
+     * 获取 hystrix Command 的 执行钩子
      */
     public HystrixCommandExecutionHook getCommandExecutionHook() {
         if (commandExecutionHook.get() == null) {
@@ -338,19 +360,37 @@ public class HystrixPlugins {
         }
     }
 
-    
+
+    /**
+     * 获取插件的实现类
+     * @param pluginClass
+     * @param <T>
+     * @return
+     */
     private <T> T getPluginImplementation(Class<T> pluginClass) {
+        // 根据传入的抽象类类型 以及从环境变量中抽取的属性来初始化
         T p = getPluginImplementationViaProperties(pluginClass, dynamicProperties);
-        if (p != null) return p;        
+        if (p != null) return p;
+        // 借助 SPI 机制初始化对象
         return findService(pluginClass, classLoader);
     }
-    
+
+    /**
+     * 获取插件实现类属性
+     * @param pluginClass   接口类型
+     * @param dynamicProperties   实现类
+     * @param <T>
+     * @return
+     */
     @SuppressWarnings("unchecked")
     private static <T> T getPluginImplementationViaProperties(Class<T> pluginClass, HystrixDynamicProperties dynamicProperties) {
+        // 获取插件类名称
         String classSimpleName = pluginClass.getSimpleName();
         // Check Archaius for plugin class.
+        // 首先尝试从系统变量中获取 plugin 的实现类
         String propertyName = "hystrix.plugin." + classSimpleName + ".implementation";
         String implementingClass = dynamicProperties.getString(propertyName, null).get();
+        // 存在的情况下 通过反射调用 这里获得实际类型后 要通过强转 返回接口类型
         if (implementingClass != null) {
             try {
                 Class<?> cls = Class.forName(implementingClass);
@@ -370,10 +410,16 @@ public class HystrixPlugins {
             return null;
         }
     }
-    
-    
 
+
+    /**
+     * 传入 classLoader 解析动态属性
+     * @param classLoader
+     * @param logSupplier
+     * @return
+     */
     private static HystrixDynamicProperties resolveDynamicProperties(ClassLoader classLoader, LoggerSupplier logSupplier) {
+        // 这里传入了 指定的插件实现类 传入的动态属性对象是从 system 变量中获得的
         HystrixDynamicProperties hp = getPluginImplementationViaProperties(HystrixDynamicProperties.class, 
                 HystrixDynamicPropertiesSystemProperties.getInstance());
         if (hp != null) {
@@ -383,6 +429,7 @@ public class HystrixPlugins {
                     hp.getClass().getCanonicalName());
             return hp;
         }
+        // 没有从环境变量中 生成 hystrixDynamicProp 所以从SPI中加载
         hp = findService(HystrixDynamicProperties.class, classLoader);
         if (hp != null) {
             logSupplier.getLogger()
@@ -401,7 +448,15 @@ public class HystrixPlugins {
                 hp.getClass().getCanonicalName());
         return hp;
     }
-    
+
+    /**
+     * 使用SPI 机制 加载serviceImpl
+     * @param spi
+     * @param classLoader
+     * @param <T>
+     * @return
+     * @throws ServiceConfigurationError
+     */
     private static <T> T findService(
             Class<T> spi, 
             ClassLoader classLoader) throws ServiceConfigurationError {
