@@ -3,6 +3,7 @@ package com.netflix.hystrix.strategy.properties;
 /**
  * @ExcludeFromJavadoc
  * @author agent
+ * 从系统变量中获取 hystrix 的动态属性
  */
 public final class HystrixDynamicPropertiesSystemProperties implements HystrixDynamicProperties {
     
@@ -10,7 +11,10 @@ public final class HystrixDynamicPropertiesSystemProperties implements HystrixDy
      * Only public for unit test purposes.
      */
     public HystrixDynamicPropertiesSystemProperties() {}
-    
+
+    /**
+     * 延迟初始化对象 只有在访问该静态域时 才会创建
+     */
     private static class LazyHolder {
         private static final HystrixDynamicPropertiesSystemProperties INSTANCE = new HystrixDynamicPropertiesSystemProperties();
     }
@@ -28,7 +32,11 @@ public final class HystrixDynamicPropertiesSystemProperties implements HystrixDy
             public String getName() {
                 return name;
             }
-            
+
+            /**
+             * Integer.getInteger  该方法就是从 System.getProp 中获取对应属性  fallback 代表默认值
+             * @return
+             */
             @Override
             public Integer get() {
                 return Integer.getInteger(name, fallback);
@@ -39,6 +47,12 @@ public final class HystrixDynamicPropertiesSystemProperties implements HystrixDy
         };
     }
 
+    /**
+     * 获取 string 类型的系统变量
+     * @param name
+     * @param fallback
+     * @return
+     */
     @Override
     public HystrixDynamicProperty<String> getString(final String name, final String fallback) {
         return new HystrixDynamicProperty<String>() {
@@ -59,6 +73,12 @@ public final class HystrixDynamicPropertiesSystemProperties implements HystrixDy
         };
     }
 
+    /**
+     * 获取long 型的系统变量
+     * @param name
+     * @param fallback
+     * @return
+     */
     @Override
     public HystrixDynamicProperty<Long> getLong(final String name, final Long fallback) {
         return new HystrixDynamicProperty<Long>() {
@@ -79,6 +99,12 @@ public final class HystrixDynamicPropertiesSystemProperties implements HystrixDy
         };
     }
 
+    /**
+     * 获取 boolean 类型的 系统变量
+     * @param name
+     * @param fallback
+     * @return
+     */
     @Override
     public HystrixDynamicProperty<Boolean> getBoolean(final String name, final Boolean fallback) {
         return new HystrixDynamicProperty<Boolean>() {

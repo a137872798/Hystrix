@@ -25,6 +25,7 @@ package com.netflix.hystrix.strategy.properties;
  *            Type of property value.
  * @see HystrixProperty
  * @see HystrixDynamicProperties
+ * 动态属性  为一般的  hystrixProp 接口增加了一个添加 回调对应的方法
  */
 public interface HystrixDynamicProperty<T> extends HystrixProperty<T>{
     

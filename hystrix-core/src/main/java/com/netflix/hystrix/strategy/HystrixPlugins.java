@@ -72,12 +72,18 @@ public class HystrixPlugins {
     /* package */ final AtomicReference<HystrixCommandExecutionHook> commandExecutionHook = new AtomicReference<HystrixCommandExecutionHook>();
     private final HystrixDynamicProperties dynamicProperties;
 
-    
+    /**
+     * 创建插件对象
+     * @param classLoader
+     * @param logSupplier
+     */
     private HystrixPlugins(ClassLoader classLoader, LoggerSupplier logSupplier) {
         //This will load Archaius if its in the classpath.
+        // 设置 classLoader
         this.classLoader = classLoader;
         //N.B. Do not use a logger before this is loaded as it will most likely load the configuration system.
         //The configuration system may need to do something prior to loading logging. @agentgt
+        // 解析动态属性
         dynamicProperties = resolveDynamicProperties(classLoader, logSupplier);
     }
 
@@ -94,6 +100,7 @@ public class HystrixPlugins {
      * @ExcludeFromJavadoc
      */
     /* private */ static HystrixPlugins create(ClassLoader classLoader) {
+        // 创建一个插件对象
         return new HystrixPlugins(classLoader, new LoggerSupplier() {
             @Override
             public Logger getLogger() {
@@ -102,6 +109,7 @@ public class HystrixPlugins {
         });
     }
     /**
+     * 创建一个熔断插件对象
      * @ExcludeFromJavadoc
      */
     /* private */ static HystrixPlugins create() {
@@ -344,13 +352,23 @@ public class HystrixPlugins {
         if (p != null) return p;        
         return findService(pluginClass, classLoader);
     }
-    
+
+    /**
+     * 获取插件实现类属性
+     * @param pluginClass   接口类型
+     * @param dynamicProperties   实现类
+     * @param <T>
+     * @return
+     */
     @SuppressWarnings("unchecked")
     private static <T> T getPluginImplementationViaProperties(Class<T> pluginClass, HystrixDynamicProperties dynamicProperties) {
+        // 获取插件类名称
         String classSimpleName = pluginClass.getSimpleName();
         // Check Archaius for plugin class.
+        // 首先尝试从系统变量中获取 plugin 的实现类
         String propertyName = "hystrix.plugin." + classSimpleName + ".implementation";
         String implementingClass = dynamicProperties.getString(propertyName, null).get();
+        // 存在的情况下 通过反射调用 这里获得实际类型后 要通过强转 返回接口类型
         if (implementingClass != null) {
             try {
                 Class<?> cls = Class.forName(implementingClass);
@@ -370,10 +388,16 @@ public class HystrixPlugins {
             return null;
         }
     }
-    
-    
 
+
+    /**
+     * 传入 classLoader 解析动态属性
+     * @param classLoader
+     * @param logSupplier
+     * @return
+     */
     private static HystrixDynamicProperties resolveDynamicProperties(ClassLoader classLoader, LoggerSupplier logSupplier) {
+        // 这里传入了 指定的插件实现类 传入的动态属性对象是从 system 变量中获得的
         HystrixDynamicProperties hp = getPluginImplementationViaProperties(HystrixDynamicProperties.class, 
                 HystrixDynamicPropertiesSystemProperties.getInstance());
         if (hp != null) {

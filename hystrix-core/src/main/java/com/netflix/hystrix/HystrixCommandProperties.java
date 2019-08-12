@@ -34,6 +34,7 @@ import com.netflix.hystrix.util.HystrixRollingPercentile;
  * Properties for instances of {@link HystrixCommand}.
  * <p>
  * Default implementation of methods uses Archaius (https://github.com/Netflix/archaius)
+ * hystrix 的 命令属性 包含了一些默认值
  */
 public abstract class HystrixCommandProperties {
     private static final Logger logger = LoggerFactory.getLogger(HystrixCommandProperties.class);
@@ -98,7 +99,14 @@ public abstract class HystrixCommandProperties {
      * </ul>
      */
     public static enum ExecutionIsolationStrategy {
-        THREAD, SEMAPHORE
+        /**
+         * 执行隔离策略 一个是使用线程
+         */
+        THREAD,
+        /**
+         * 基于信号量的隔离策略
+         */
+        SEMAPHORE
     }
 
     protected HystrixCommandProperties(HystrixCommandKey key) {
@@ -455,15 +463,36 @@ public abstract class HystrixCommandProperties {
 
     /**
      * HystrixProperty that converts a String to ExecutionIsolationStrategy so we remain TypeSafe.
+     * 隔离策略属性 实现 hystrix属性对象接口
      */
     private static final class ExecutionIsolationStrategyHystrixProperty implements HystrixProperty<ExecutionIsolationStrategy> {
+        /**
+         * hystrix 动态属性 增加一个 addCallback 方法
+         */
         private final HystrixDynamicProperty<String> property;
+        /**
+         * 当前使用的线程隔离策略
+         */
         private volatile ExecutionIsolationStrategy value;
+        /**
+         * 使用的默认线程隔离策略
+         */
         private final ExecutionIsolationStrategy defaultValue;
 
+        /**
+         * 生成隔离策略
+         * @param builderOverrideValue 实际的线程隔离策略
+         * @param key 代表一次处理的唯一标识吗???
+         * @param propertyPrefix 属性名前缀
+         * @param defaultValue 默认线程隔离策略
+         * @param instanceProperty 实例对象的属性
+         */
         private ExecutionIsolationStrategyHystrixProperty(ExecutionIsolationStrategy builderOverrideValue, HystrixCommandKey key, String propertyPrefix, ExecutionIsolationStrategy defaultValue, String instanceProperty) {
+
+            // 设置默认值
             this.defaultValue = defaultValue;
             String overrideValue = null;
+            // 获取执行策略的name 属性
             if (builderOverrideValue != null) {
                 overrideValue = builderOverrideValue.name();
             }
@@ -533,6 +562,7 @@ public abstract class HystrixCommandProperties {
      * } </pre>
      * 
      * @NotThreadSafe
+     * Setter 对象 应该是用来设置这些属性的  类似于 Builder 进行链式 build
      */
     public static class Setter {
 
@@ -564,38 +594,74 @@ public abstract class HystrixCommandProperties {
         /* package */ Setter() {
         }
 
+        /**
+         * 能否被熔断
+         * @return
+         */
         public Boolean getCircuitBreakerEnabled() {
             return circuitBreakerEnabled;
         }
 
+        /**
+         * 当发生Error 的熔断触发百分比
+         * @return
+         */
         public Integer getCircuitBreakerErrorThresholdPercentage() {
             return circuitBreakerErrorThresholdPercentage;
         }
 
+        /**
+         * 熔断强制关闭
+         * @return
+         */
         public Boolean getCircuitBreakerForceClosed() {
             return circuitBreakerForceClosed;
         }
 
+        /**
+         * 熔断强制开启
+         * @return
+         */
         public Boolean getCircuitBreakerForceOpen() {
             return circuitBreakerForceOpen;
         }
 
+        /**
+         * 应该是 触发熔断的请求量
+         * @return
+         */
         public Integer getCircuitBreakerRequestVolumeThreshold() {
             return circuitBreakerRequestVolumeThreshold;
         }
 
+        /**
+         * 熔断沉睡窗口 ???
+         * @return
+         */
         public Integer getCircuitBreakerSleepWindowInMilliseconds() {
             return circuitBreakerSleepWindowInMilliseconds;
         }
 
+        /**
+         * 信号量 的隔离请求量
+         * @return
+         */
         public Integer getExecutionIsolationSemaphoreMaxConcurrentRequests() {
             return executionIsolationSemaphoreMaxConcurrentRequests;
         }
 
+        /**
+         * 获取隔离策略
+         * @return
+         */
         public ExecutionIsolationStrategy getExecutionIsolationStrategy() {
             return executionIsolationStrategy;
         }
 
+        /**
+         * 超时时间 （超过该时间 就会对线程进行打断）
+         * @return
+         */
         public Boolean getExecutionIsolationThreadInterruptOnTimeout() {
             return executionIsolationThreadInterruptOnTimeout;
         }

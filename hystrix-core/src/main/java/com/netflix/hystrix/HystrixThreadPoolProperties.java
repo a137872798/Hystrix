@@ -135,17 +135,21 @@ public abstract class HystrixThreadPoolProperties {
      * 2) allowMaximumSizeToDivergeFromCoreSize == true, maximumSize >= coreSize: thread pool has different core/max sizes, so return the configured max
      * 3) allowMaximumSizeToDivergeFromCoreSize == true, maximumSize < coreSize: threadpool incorrectly configured, use coreSize for max size
      * @return actually configured maximum size of threadpool
+     * 获取实际的最大尺寸 就是依据 core 和 max 的 大小 来调整 max的大小
      */
     public Integer actualMaximumSize() {
         final int coreSize = coreSize().get();
         final int maximumSize = maximumSize().get();
+        // 代表需要调整
         if (getAllowMaximumSizeToDivergeFromCoreSize().get()) {
+            // 将核心线程池 作为max 大小 返回
             if (coreSize > maximumSize) {
                 return coreSize;
             } else {
                 return maximumSize;
             }
         } else {
+            // 如果 getAllowMaximumSizeToDivergeFromCoreSize() 为 false 就使用 coreSize 作为 maxSize
             return coreSize;
         }
     }
@@ -236,6 +240,7 @@ public abstract class HystrixThreadPoolProperties {
      * } </pre>
      * 
      * @NotThreadSafe
+     * 该对象封装了 针对线程池属性的 set/get 方法
      */
     public static class Setter {
         private Integer coreSize = null;
