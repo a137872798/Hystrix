@@ -29,6 +29,7 @@ import com.netflix.hystrix.HystrixEventType;
  * The Counter type events can be used with {@link HystrixRollingNumber#increment}, {@link HystrixRollingNumber#add}, {@link HystrixRollingNumber#getRollingSum} and others.
  * <p>
  * The MaxUpdater type events can be used with {@link HystrixRollingNumber#updateRollingMax} and {@link HystrixRollingNumber#getRollingMaxValue}.
+ * 统计事件
  */
 public enum HystrixRollingNumberEvent {
     SUCCESS(1), FAILURE(1), TIMEOUT(1), SHORT_CIRCUITED(1), THREAD_POOL_REJECTED(1), SEMAPHORE_REJECTED(1), BAD_REQUEST(1),
@@ -42,10 +43,18 @@ public enum HystrixRollingNumberEvent {
         this.type = type;
     }
 
+    /**
+     * 1 就代表是计数
+     * @return
+     */
     public boolean isCounter() {
         return type == 1;
     }
 
+    /**
+     * 2 代表是更新
+     * @return
+     */
     public boolean isMaxUpdater() {
         return type == 2;
     }

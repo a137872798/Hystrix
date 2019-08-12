@@ -29,6 +29,7 @@ import java.util.Random;
  * A package-local class holding common representation and mechanics
  * for classes supporting dynamic striping on 64bit values. The class
  * extends Number so that concrete subclasses must publicly do so.
+ * 一些原子操作需要的方法
  */
 abstract class Striped64 extends Number {
     /*

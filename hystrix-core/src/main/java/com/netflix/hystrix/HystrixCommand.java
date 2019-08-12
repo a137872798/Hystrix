@@ -43,6 +43,7 @@ import rx.functions.Func0;
  *            the return type
  * 
  * @ThreadSafe
+ * hystrix 的核心类 通过命令模式包装要调用的 对象 实现线程隔离 降级 熔断等
  */
 public abstract class HystrixCommand<R> extends AbstractCommand<R> implements HystrixExecutable<R>, HystrixInvokableInfo<R>, HystrixObservable<R> {
 
@@ -338,6 +339,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
      *             if invalid arguments or state were used representing a user failure, not a system failure
      * @throws IllegalStateException
      *             if invoked more than once
+     *             阻塞获取 结果 / 抛出异常
      */
     public R execute() {
         try {
@@ -368,6 +370,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
      *             via {@code Future.get()} in {@link ExecutionException#getCause()} if invalid arguments or state were used representing a user failure, not a system failure
      * @throws IllegalStateException
      *             if invoked more than once
+     *             返回一个 包含单个响应对象的 future
      */
     public Future<R> queue() {
         /*

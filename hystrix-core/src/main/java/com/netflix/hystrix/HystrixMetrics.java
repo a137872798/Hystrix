@@ -24,8 +24,15 @@ import com.netflix.hystrix.util.HystrixRollingNumberEvent;
  */
 public abstract class HystrixMetrics {
 
+    /**
+     * 测量计数器
+     */
     protected final HystrixRollingNumber counter;
 
+    /**
+     * 使用一个 计数器对象进行初始化
+     * @param counter
+     */
     protected HystrixMetrics(HystrixRollingNumber counter) {
         this.counter = counter;
     }
@@ -35,6 +42,7 @@ public abstract class HystrixMetrics {
      * @param event
      *            {@link HystrixRollingNumberEvent} of the event to retrieve a sum for
      * @return long cumulative count
+     * 获取 该事件的计数器
      */
     public long getCumulativeCount(HystrixRollingNumberEvent event) {
         return counter.getCumulativeSum(event);

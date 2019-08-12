@@ -221,7 +221,13 @@ import java.util.concurrent.atomic.AtomicReference;
      */
     protected volatile ExecutionResult executionResult = ExecutionResult.EMPTY; //state on shared execution
 
+    /**
+     * 是否从缓存中获取 res
+     */
     protected volatile boolean isResponseFromCache = false;
+    /**
+     * 执行结果对象
+     */
     protected volatile ExecutionResult executionResultAtTimeOfCancellation;
     protected volatile long commandStartTimestamp = -1L;
 

@@ -54,6 +54,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * @since 1.8
  * @author Doug Lea
+ * long 型的 64位地址
  */
 public class LongAdder extends Striped64 implements Serializable {
     private static final long serialVersionUID = 7249069246863182397L;
@@ -108,6 +109,7 @@ public class LongAdder extends Striped64 implements Serializable {
      * incorporated.
      *
      * @return the sum
+     * 获取 总数 就是将cell 中每个值求和
      */
     public long sum() {
         long sum = base;

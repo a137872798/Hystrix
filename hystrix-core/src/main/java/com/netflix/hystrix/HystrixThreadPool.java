@@ -199,11 +199,24 @@ public interface HystrixThreadPool {
          * 线程池对象
          */
         private final ThreadPoolExecutor threadPool;
+        /**
+         * 该线程池 相关的测量对象
+         */
         private final HystrixThreadPoolMetrics metrics;
+        /**
+         * 队列大小
+         */
         private final int queueSize;
 
+        /**
+         * 初始化线程池对象
+         * @param threadPoolKey
+         * @param propertiesDefaults
+         */
         public HystrixThreadPoolDefault(HystrixThreadPoolKey threadPoolKey, HystrixThreadPoolProperties.Setter propertiesDefaults) {
+            // 传入 key 和  默认属性对象来生成一个新的 配置对象
             this.properties = HystrixPropertiesFactory.getThreadPoolProperties(threadPoolKey, propertiesDefaults);
+            // 获取并发策略对象
             HystrixConcurrencyStrategy concurrencyStrategy = HystrixPlugins.getInstance().getConcurrencyStrategy();
             this.queueSize = properties.maxQueueSize().get();
 

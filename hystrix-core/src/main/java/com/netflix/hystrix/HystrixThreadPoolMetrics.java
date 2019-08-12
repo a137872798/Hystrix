@@ -35,15 +35,28 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
+ * 有关线程池的 计量对象
  * Used by {@link HystrixThreadPool} to record metrics.
  */
 public class HystrixThreadPoolMetrics extends HystrixMetrics {
 
+    /**
+     * 内部存放了所有的 hystrix 事件类型
+     */
     private static final HystrixEventType[] ALL_COMMAND_EVENT_TYPES = HystrixEventType.values();
+    /**
+     * 获取线程池相关的事件类型
+     */
     private static final HystrixEventType.ThreadPool[] ALL_THREADPOOL_EVENT_TYPES = HystrixEventType.ThreadPool.values();
+    /**
+     * 获取线程池相关事件数量
+     */
     private static final int NUMBER_THREADPOOL_EVENT_TYPES = ALL_THREADPOOL_EVENT_TYPES.length;
 
     // String is HystrixThreadPoolKey.name() (we can't use HystrixThreadPoolKey directly as we can't guarantee it implements hashcode/equals correctly)
+    /**
+     * 同样使用一个 静态变量当作缓存容器 每次使用 key 去获取时 没有就会将元素生成并存放到缓存中
+     */
     private static final ConcurrentHashMap<String, HystrixThreadPoolMetrics> metrics = new ConcurrentHashMap<String, HystrixThreadPoolMetrics>();
 
     /**
@@ -58,18 +71,22 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
      * @param properties
      *            Pass-thru to {@link HystrixThreadPoolMetrics} instance on first time when constructed
      * @return {@link HystrixThreadPoolMetrics}
+     * 使用key 去获取 线程池 测量对象
      */
     public static HystrixThreadPoolMetrics getInstance(HystrixThreadPoolKey key, ThreadPoolExecutor threadPool, HystrixThreadPoolProperties properties) {
         // attempt to retrieve from cache first
+        // 尝试从缓存中获取数据对象
         HystrixThreadPoolMetrics threadPoolMetrics = metrics.get(key.name());
         if (threadPoolMetrics != null) {
             return threadPoolMetrics;
         } else {
+            // 使用内置锁 保证只有单对象创建成功
             synchronized (HystrixThreadPoolMetrics.class) {
                 HystrixThreadPoolMetrics existingMetrics = metrics.get(key.name());
                 if (existingMetrics != null) {
                     return existingMetrics;
                 } else {
+                    // 初始化线程池相关的测量对象
                     HystrixThreadPoolMetrics newThreadPoolMetrics = new HystrixThreadPoolMetrics(key, threadPool, properties);
                     metrics.putIfAbsent(key.name(), newThreadPoolMetrics);
                     return newThreadPoolMetrics;
@@ -93,10 +110,13 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
      * All registered instances of {@link HystrixThreadPoolMetrics}
      * 
      * @return {@code Collection<HystrixThreadPoolMetrics>}
+     * 这里返回的是 当前缓存中维护的所有视图对象
      */
     public static Collection<HystrixThreadPoolMetrics> getInstances() {
         List<HystrixThreadPoolMetrics> threadPoolMetrics = new ArrayList<HystrixThreadPoolMetrics>();
+        // 获取所有线程池 测量对象
         for (HystrixThreadPoolMetrics tpm: metrics.values()) {
+            // 只返回完成过任务的线程池对象
             if (hasExecutedCommandsOnThread(tpm)) {
                 threadPoolMetrics.add(tpm);
             }
@@ -105,6 +125,11 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
         return Collections.unmodifiableCollection(threadPoolMetrics);
     }
 
+    /**
+     * 判断当前线程是否完成过任务
+     * @param threadPoolMetrics
+     * @return
+     */
     private static boolean hasExecutedCommandsOnThread(HystrixThreadPoolMetrics threadPoolMetrics) {
         return threadPoolMetrics.getCurrentCompletedTaskCount().intValue() > 0;
     }

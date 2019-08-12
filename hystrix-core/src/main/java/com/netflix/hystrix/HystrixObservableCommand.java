@@ -31,6 +31,7 @@ import com.netflix.hystrix.strategy.eventnotifier.HystrixEventNotifier;
  *            the return type
  * 
  * @ThreadSafe
+ * hystrix 的核心类
  */
 public abstract class HystrixObservableCommand<R> extends AbstractCommand<R> implements HystrixObservable<R>, HystrixInvokableInfo<R> {
 

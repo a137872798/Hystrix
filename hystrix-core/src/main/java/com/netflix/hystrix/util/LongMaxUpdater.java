@@ -66,6 +66,7 @@ public class LongMaxUpdater extends Striped64 implements Serializable {
      * Updates the maximum to be at least the given value.
      *
      * @param x the value to update
+     *          使用传入的值进行初始化
      */
     public void update(long x) {
         Cell[] as; long b, v; HashCode hc; Cell a; int n;
@@ -88,6 +89,7 @@ public class LongMaxUpdater extends Striped64 implements Serializable {
      * not be incorporated.
      *
      * @return the maximum
+     * 获取最大值
      */
     public long max() {
         Cell[] as = cells;

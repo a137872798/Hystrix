@@ -65,8 +65,14 @@ public class HystrixRollingNumber {
      * 当前桶数
      */
     final int numberOfBuckets;
+    /**
+     * 多少毫秒算一个桶 ???
+     */
     final int bucketSizeInMillseconds;
 
+    /**
+     * 桶数组 每个元素都是一个桶对象
+     */
     final BucketCircularArray buckets;
     private final CumulativeSum cumulativeSum = new CumulativeSum();
 
@@ -381,10 +387,20 @@ public class HystrixRollingNumber {
 
     /**
      * Counters for a given 'bucket' of time.
+     * 桶对象
      */
     /* package */static class Bucket {
+        /**
+         * 窗口 开始 ???
+         */
         final long windowStart;
+        /**
+         * 类似于 缓存伪共享的 对象
+         */
         final LongAdder[] adderForCounterType;
+        /**
+         * 最大值更新???
+         */
         final LongMaxUpdater[] updaterForCounterType;
 
         Bucket(long startTime) {
@@ -398,6 +414,7 @@ public class HystrixRollingNumber {
              */
 
             // initialize the array of LongAdders
+            // 初始化 数组对象 只设置 event 中 type 为 counter 的
             adderForCounterType = new LongAdder[HystrixRollingNumberEvent.values().length];
             for (HystrixRollingNumberEvent type : HystrixRollingNumberEvent.values()) {
                 if (type.isCounter()) {
@@ -405,21 +422,32 @@ public class HystrixRollingNumber {
                 }
             }
 
+            // 只记录 类型为 maxUpdate 的
             updaterForCounterType = new LongMaxUpdater[HystrixRollingNumberEvent.values().length];
             for (HystrixRollingNumberEvent type : HystrixRollingNumberEvent.values()) {
                 if (type.isMaxUpdater()) {
                     updaterForCounterType[type.ordinal()] = new LongMaxUpdater();
                     // initialize to 0 otherwise it is Long.MIN_VALUE
+                    // 调用 update(0) 进行初始化
                     updaterForCounterType[type.ordinal()].update(0);
                 }
             }
         }
 
+        /**
+         * 传入不同的事件 走不同的逻辑
+         * @param type
+         * @return
+         */
         long get(HystrixRollingNumberEvent type) {
+            // 如果是计数类型
             if (type.isCounter()) {
+                // 获取总数 就是计算某个 longAddr 中所有元素值的总和
                 return adderForCounterType[type.ordinal()].sum();
             }
+            // 如果是更新类型
             if (type.isMaxUpdater()) {
+                // 获取最大值
                 return updaterForCounterType[type.ordinal()].max();
             }
             throw new IllegalStateException("Unknown type of event: " + type.name());
@@ -522,7 +550,8 @@ public class HystrixRollingNumber {
      * methods are NOT thread-safe for external access they depend upon the lock.tryLock() protection in <code>getCurrentBucket</code> which ensures only a single thread will access them at at time.
      * <p>
      * benjchristensen => This implementation was chosen based on performance testing I did and documented at: http://benjchristensen.com/2011/10/08/atomiccirculararray/
-     */
+     * 桶数组对象
+     * /
     /* package */static class BucketCircularArray implements Iterable<Bucket> {
         private final AtomicReference<ListState> state;
         private final int dataLength; // we don't resize, we always stay the same, so remember this
@@ -532,6 +561,7 @@ public class HystrixRollingNumber {
          * Immutable object that is atomically set every time the state of the BucketCircularArray changes
          * <p>
          * This handles the compound operations
+         * bucket 对象被包裹在里面
          */
         private class ListState {
             /*
