@@ -61,6 +61,7 @@ import java.util.concurrent.Future;
  *            The type returned from this command.
  * @param <RequestArgumentType>
  *            The type of the request argument. If multiple arguments are needed, wrap them in another object or a Tuple.
+ *            这里是将多个请求 折叠成一个 HystrixCommand 并执行
  */
 public abstract class HystrixCollapser<BatchReturnType, ResponseType, RequestArgumentType> implements HystrixExecutable<ResponseType>, HystrixObservable<ResponseType> {
 

@@ -19,6 +19,7 @@ package com.netflix.hystrix.strategy.executionhook;
  * Default implementations of {@link HystrixCommandExecutionHook} that does nothing.
  * 
  * @ExcludeFromJavadoc
+ * 默认的 hystrix 命令钩子对象
  */
 public class HystrixCommandExecutionHookDefault extends HystrixCommandExecutionHook {
 

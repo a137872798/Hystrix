@@ -26,6 +26,7 @@ import com.netflix.hystrix.HystrixCommand;
  * <p>
  * Doing this logic in the constructor could result in memory leaks, double-publishing and other such behavior because this can be optimistically constructed more than once and "extras" discarded with
  * only one actually having <code>initialize()</code> called on it.
+ * 命令测量发布接口
  */
 public interface HystrixMetricsPublisherCommand {
 

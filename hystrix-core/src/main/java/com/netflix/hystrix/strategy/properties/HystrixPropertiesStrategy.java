@@ -151,6 +151,7 @@ public abstract class HystrixPropertiesStrategy {
      * @param collapserKey collapser key used in determining collapser's cache key
      * @param builder builder for {@link HystrixCollapserProperties} used in determining collapser's cache key
      * @return String value to be used as the cache key of a {@link HystrixCollapserProperties} implementation.
+     * 获取传入的碰撞 key 的name 属性
      */
     public String getCollapserPropertiesCacheKey(HystrixCollapserKey collapserKey, HystrixCollapserProperties.Setter builder) {
         return collapserKey.name();
@@ -164,6 +165,7 @@ public abstract class HystrixPropertiesStrategy {
      *
      *
      * @return Implementation of {@link com.netflix.hystrix.HystrixTimerThreadPoolProperties}
+     * 获取定时线程池的name 属性
      */
     public HystrixTimerThreadPoolProperties getTimerThreadPoolProperties() {
         return new HystrixPropertiesTimerThreadPoolDefault();

@@ -38,6 +38,7 @@ import com.netflix.hystrix.strategy.HystrixPlugins;
  * onto separate worker threads.
  * 
  * @since 1.2
+ * hystrix 执行command 时 触发的hook  基本上都是 直接返回异常 or 传入的值 或者 就是noop 应该是由用户来定制
  * */
 public abstract class HystrixCommandExecutionHook {
 
@@ -47,6 +48,7 @@ public abstract class HystrixCommandExecutionHook {
      * @param commandInstance The executing HystrixInvokable instance.
      *
      * @since 1.2
+     * 启动时noop
      */
     public <T> void onStart(HystrixInvokable<T> commandInstance) {
         //do nothing by default
@@ -59,6 +61,7 @@ public abstract class HystrixCommandExecutionHook {
      * @param value value emitted
      *
      * @since 1.4
+     * 调用 发出方法时 直接返回传入的 value 对象
      */
     public <T> T onEmit(HystrixInvokable<T> commandInstance, T value) {
         return value; //by default, just pass through
@@ -72,6 +75,7 @@ public abstract class HystrixCommandExecutionHook {
      * @param e exception object
      *
      * @since 1.2
+     * 直接返回异常对象
      */
     public <T> Exception onError(HystrixInvokable<T> commandInstance, FailureType failureType, Exception e) {
         return e; //by default, just pass through
@@ -83,6 +87,7 @@ public abstract class HystrixCommandExecutionHook {
      * @param commandInstance The executing HystrixInvokable instance.
      *
      * @since 1.4
+     * 成功时不做任何处理
      */
     public <T> void onSuccess(HystrixInvokable<T> commandInstance) {
         //do nothing by default
@@ -94,6 +99,7 @@ public abstract class HystrixCommandExecutionHook {
      * @param commandInstance The executing HystrixCommand instance.
      *
      * @since 1.2
+     * 当线程启动时触发  HystrixInvokable 为 Command 的顶级接口
      */
     public <T> void onThreadStart(HystrixInvokable<T> commandInstance) {
         //do nothing by default
@@ -107,6 +113,7 @@ public abstract class HystrixCommandExecutionHook {
      * @param commandInstance The executing HystrixCommand instance.
      *
      * @since 1.2
+     * 当执行完成时触发的钩子
      */
     public <T> void onThreadComplete(HystrixInvokable<T> commandInstance) {
         // do nothing by default
@@ -118,6 +125,7 @@ public abstract class HystrixCommandExecutionHook {
      * @param commandInstance The executing HystrixInvokable instance.
      *
      * @since 1.4
+     * 执行时调用
      */
     public <T> void onExecutionStart(HystrixInvokable<T> commandInstance) {
         //do nothing by default

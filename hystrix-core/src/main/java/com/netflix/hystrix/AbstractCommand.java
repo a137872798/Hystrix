@@ -66,7 +66,7 @@ import java.util.concurrent.atomic.AtomicReference;
     private static final Logger logger = LoggerFactory.getLogger(AbstractCommand.class);
 
     /**
-     * 循环打破器 ???
+     * 熔断器
      */
     protected final HystrixCircuitBreaker circuitBreaker;
     /**

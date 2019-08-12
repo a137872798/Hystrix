@@ -45,12 +45,25 @@ import com.netflix.hystrix.strategy.properties.HystrixProperty;
  * See UnitTest for usage and expected behavior examples.
  * 
  * @ThreadSafe
+ * 类似于 netty的  hashWheel 将每个时间段 作为一个桶对象 每进入到一个桶 就统计一些数据
  */
 public class HystrixRollingNumber {
 
+    /**
+     * 当前时间对象
+     */
     private static final Time ACTUAL_TIME = new ActualTime();
+    /**
+     * 时间接口
+     */
     private final Time time;
+    /**
+     * 当前时间 以毫秒为单位
+     */
     final int timeInMilliseconds;
+    /**
+     * 当前桶数
+     */
     final int numberOfBuckets;
     final int bucketSizeInMillseconds;
 
@@ -347,10 +360,16 @@ public class HystrixRollingNumber {
         }
     }
 
+    /**
+     * hystrix 的时间接口对象 用于获取当前时间
+     */
     /* package */static interface Time {
         public long getCurrentTimeInMillis();
     }
 
+    /**
+     * 获取当前时间
+     */
     private static class ActualTime implements Time {
 
         @Override
