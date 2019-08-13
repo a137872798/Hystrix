@@ -38,14 +38,21 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Used by {@link HystrixCommand} to record metrics.
+ * 关于 command 的统计对象
  */
 public class HystrixCommandMetrics extends HystrixMetrics {
 
     @SuppressWarnings("unused")
     private static final Logger logger = LoggerFactory.getLogger(HystrixCommandMetrics.class);
 
+    /**
+     * 维护了所有的事件类型
+     */
     private static final HystrixEventType[] ALL_EVENT_TYPES = HystrixEventType.values();
 
+    /**
+     * 将事件添加到 bucket 中   Func2 代表传入 2个类型参数 返回第3个类型的结果
+     */
     public static final Func2<long[], HystrixCommandCompletion, long[]> appendEventToBucket = new Func2<long[], HystrixCommandCompletion, long[]>() {
         @Override
         public long[] call(long[] initialCountArray, HystrixCommandCompletion execution) {

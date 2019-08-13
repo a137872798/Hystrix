@@ -30,24 +30,37 @@ import java.util.concurrent.ConcurrentHashMap;
  * Cache that is scoped to the current request as managed by {@link HystrixRequestVariableDefault}.
  * <p>
  * This is used for short-lived caching of {@link HystrixCommand} instances to allow de-duping of command executions within a request.
+ * 断路器的 请求缓存对象
  */
 public class HystrixRequestCache {
     @SuppressWarnings("unused")
     private static final Logger logger = LoggerFactory.getLogger(HystrixRequestCache.class);
 
     // the String key must be: HystrixRequestCache.prefix + concurrencyStrategy + cacheKey
+    // 存放了请求缓存键 以及对应的请求缓存对象
     private final static ConcurrentHashMap<RequestCacheKey, HystrixRequestCache> caches = new ConcurrentHashMap<RequestCacheKey, HystrixRequestCache>();
 
+    /**
+     * 请求缓存键 就是 以 CommandKey 或者 CollapserKey 作为 key
+     */
     private final RequestCacheKey rcKey;
+    /**
+     * 并发策略 根据不同的配置生成需要的 线程池对象
+     */
     private final HystrixConcurrencyStrategy concurrencyStrategy;
 
     /**
      * A ConcurrentHashMap per 'prefix' and per request scope that is used to to dedupe requests in the same request.
      * <p>
      * Key => CommandPrefix + CacheKey : Future<?> from queue()
+     * 请求变量的缓存
      */
     private static final HystrixRequestVariableHolder<ConcurrentHashMap<ValueCacheKey, HystrixCachedObservable<?>>> requestVariableForCache = new HystrixRequestVariableHolder<ConcurrentHashMap<ValueCacheKey, HystrixCachedObservable<?>>>(new HystrixRequestVariableLifecycle<ConcurrentHashMap<ValueCacheKey, HystrixCachedObservable<?>>>() {
 
+        /**
+         * 内部的 HystrixRequestVariableLifecycle 对象初始化的时候 就是生成一个 CHM 对象
+         * @return
+         */
         @Override
         public ConcurrentHashMap<ValueCacheKey, HystrixCachedObservable<?>> initialValue() {
             return new ConcurrentHashMap<ValueCacheKey, HystrixCachedObservable<?>>();
@@ -73,7 +86,14 @@ public class HystrixRequestCache {
         return getInstance(new RequestCacheKey(key, concurrencyStrategy), concurrencyStrategy);
     }
 
+    /**
+     * 根据 cacheKey 获取缓存对象
+     * @param rcKey
+     * @param concurrencyStrategy
+     * @return
+     */
     private static HystrixRequestCache getInstance(RequestCacheKey rcKey, HystrixConcurrencyStrategy concurrencyStrategy) {
+        // 获取请求对象
         HystrixRequestCache c = caches.get(rcKey);
         if (c == null) {
             HystrixRequestCache newRequestCache = new HystrixRequestCache(rcKey, concurrencyStrategy);
@@ -93,6 +113,7 @@ public class HystrixRequestCache {
      * Retrieve a cached Future for this request scope if a matching command has already been executed/queued.
      * 
      * @return {@code Future<T>}
+     * 根据缓存键 获取 observable 对象
      */
     // suppressing warnings because we are using a raw Future since it's in a heterogeneous ConcurrentHashMap cache
     @SuppressWarnings({ "unchecked" })
@@ -167,6 +188,7 @@ public class HystrixRequestCache {
      * types.
      * 
      * @return ValueCacheKey
+     * 使用缓存key 生成 ValueCacheKey
      */
     private ValueCacheKey getRequestCacheKey(String cacheKey) {
         if (cacheKey != null) {
@@ -218,10 +240,24 @@ public class HystrixRequestCache {
 
     }
 
+    /**
+     * 请求缓存键
+     */
     private static class RequestCacheKey {
+        /**
+         * 当出现 key 冲突的时候 代表是 Collapser / Command
+         */
         private final short type; // used to differentiate between Collapser/Command if key is same between them
+        /**
+         * 缓存键
+         */
         private final String key;
+        /**
+         * 线程池的相关属性
+         */
         private final HystrixConcurrencyStrategy concurrencyStrategy;
+
+        // 2种不同的初始化方法
 
         private RequestCacheKey(HystrixCommandKey commandKey, HystrixConcurrencyStrategy concurrencyStrategy) {
             type = 1;

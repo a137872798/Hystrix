@@ -22,9 +22,16 @@ import rx.functions.Func1;
 /**
  * Data class that comprises the event stream for Hystrix command executions.
  * As of 1.5.0-RC1, this is only {@link HystrixCommandCompletion}s.
+ * 代表 hystrix 的命令事件
  */
 public abstract class HystrixCommandEvent implements HystrixEvent {
+    /**
+     * 命令缓存键 对象
+     */
     private final HystrixCommandKey commandKey;
+    /**
+     * 线程池键 对象
+     */
     private final HystrixThreadPoolKey threadPoolKey;
 
     protected HystrixCommandEvent(HystrixCommandKey commandKey, HystrixThreadPoolKey threadPoolKey) {
@@ -40,16 +47,39 @@ public abstract class HystrixCommandEvent implements HystrixEvent {
         return threadPoolKey;
     }
 
+    /**
+     * 是否开始执行
+     * @return
+     */
     public abstract boolean isExecutionStart();
 
+    /**
+     * 是否在线程中执行
+     * @return
+     */
     public abstract boolean isExecutedInThread();
 
+    /**
+     * 是否被线程池拒绝
+     * @return
+     */
     public abstract boolean isResponseThreadPoolRejected();
 
+    /**
+     * 是否正常完成
+     * @return
+     */
     public abstract boolean isCommandCompletion();
 
+    /**
+     * 是否完成
+     * @return
+     */
     public abstract boolean didCommandExecute();
 
+    /**
+     * 只有完成时 才触发
+     */
     public static final Func1<HystrixCommandEvent, Boolean> filterCompletionsOnly = new Func1<HystrixCommandEvent, Boolean>() {
         @Override
         public Boolean call(HystrixCommandEvent commandEvent) {
@@ -57,6 +87,9 @@ public abstract class HystrixCommandEvent implements HystrixEvent {
         }
     };
 
+    /**
+     * 实际执行时触发
+     */
     public static final Func1<HystrixCommandEvent, Boolean> filterActualExecutions = new Func1<HystrixCommandEvent, Boolean>() {
         @Override
         public Boolean call(HystrixCommandEvent commandEvent) {

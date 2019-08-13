@@ -31,19 +31,35 @@ import org.slf4j.LoggerFactory;
  * @param <T>
  * 
  * @ExcludeFromJavadoc
+ * 请求变量包装器
  */
 public class HystrixRequestVariableHolder<T> {
 
     static final Logger logger = LoggerFactory.getLogger(HystrixRequestVariableHolder.class);
 
+    /**
+     * key 对象本身内部也维护了一个 RV 对象  HystrixRequestVariable 对象内部就一个get 方法
+     */
     private static ConcurrentHashMap<RVCacheKey, HystrixRequestVariable<?>> requestVariableInstance = new ConcurrentHashMap<RVCacheKey, HystrixRequestVariable<?>>();
 
+    /**
+     * 生命周期对象
+     */
     private final HystrixRequestVariableLifecycle<T> lifeCycleMethods;
 
+    /**
+     * 通过传入一个 请求变量的生命周期对象进行初始化  该接口包含一个 init 和一个 shutdown 方法
+     * @param lifeCycleMethods
+     */
     public HystrixRequestVariableHolder(HystrixRequestVariableLifecycle<T> lifeCycleMethods) {
         this.lifeCycleMethods = lifeCycleMethods;
     }
 
+    /**
+     * 通过传入的 并发策略 获取 缓存请求变量
+     * @param concurrencyStrategy
+     * @return
+     */
     @SuppressWarnings("unchecked")
     public T get(HystrixConcurrencyStrategy concurrencyStrategy) {
         /*
@@ -51,6 +67,7 @@ public class HystrixRequestVariableHolder<T> {
          * 2) If no implementation is found in cache then construct from factory.
          * 3) Cache implementation from factory as each object instance needs to be statically cached to be relevant across threads.
          */
+        // 从缓存中 获取 没有的话就 创建一个新的 并设置到缓存中
         RVCacheKey key = new RVCacheKey(this, concurrencyStrategy);
         HystrixRequestVariable<?> rvInstance = requestVariableInstance.get(key);
         if (rvInstance == null) {
@@ -65,11 +82,18 @@ public class HystrixRequestVariableHolder<T> {
             }
         }
 
+        // 实际 也是委托给 RV 对象 该对象 只是封装了一层 缓存的概念 (内部的 static 缓存容器 以及 cacheKey)
         return (T) requestVariableInstance.get(key).get();
     }
 
+    /**
+     * 请求变量缓存键
+     */
     private static class RVCacheKey {
 
+        /**
+         * 缓存键本身就是由 RVH 对象来创建的
+         */
         private final HystrixRequestVariableHolder<?> rvHolder;
         private final HystrixConcurrencyStrategy concurrencyStrategy;
 

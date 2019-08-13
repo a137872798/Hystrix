@@ -23,6 +23,7 @@ import com.netflix.hystrix.util.InternMap;
  * By default this will be used to define the {@link HystrixThreadPoolKey} unless a separate one is defined.
  * <p>
  * This interface is intended to work natively with Enums so that implementing code can have an enum with the owners that implements this interface.
+ * 命令组key对象
  */
 public interface HystrixCommandGroupKey extends HystrixKey {
     class Factory {
@@ -30,8 +31,10 @@ public interface HystrixCommandGroupKey extends HystrixKey {
         }
 
         // used to intern instances so we don't keep re-creating them millions of times for the same key
+        // 缓存
         private static final InternMap<String, HystrixCommandGroupDefault> intern
                 = new InternMap<String, HystrixCommandGroupDefault>(
+                        // 该方法就是在 没有从缓存中查询到对应数据的时候调用该方法去生成
                 new InternMap.ValueConstructor<String, HystrixCommandGroupDefault>() {
                     @Override
                     public HystrixCommandGroupDefault create(String key) {
@@ -56,6 +59,10 @@ public interface HystrixCommandGroupKey extends HystrixKey {
             }
         }
 
+        /**
+         * 缓存容器的大小
+         * @return
+         */
         /* package-private */ static int getGroupCount() {
             return intern.size();
         }

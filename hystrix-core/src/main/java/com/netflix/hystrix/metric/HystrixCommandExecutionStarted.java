@@ -21,9 +21,16 @@ import com.netflix.hystrix.HystrixThreadPoolKey;
 
 /**
  * Data class that get fed to event stream when a command starts executing.
+ * 代表command 开始 execution 时的 事件对象
  */
 public class HystrixCommandExecutionStarted extends HystrixCommandEvent {
+    /**
+     * 执行隔离策略
+     */
     private final HystrixCommandProperties.ExecutionIsolationStrategy isolationStrategy;
+    /**
+     * 当前并发数
+     */
     private final int currentConcurrency;
 
     public HystrixCommandExecutionStarted(HystrixCommandKey commandKey, HystrixThreadPoolKey threadPoolKey,
@@ -34,16 +41,28 @@ public class HystrixCommandExecutionStarted extends HystrixCommandEvent {
         this.currentConcurrency = currentConcurrency;
     }
 
+    /**
+     * 当前是否开始执行 返回true
+     * @return
+     */
     @Override
     public boolean isExecutionStart() {
         return true;
     }
 
+    /**
+     * 隔离策略有2种 一种是 基于线程 一种是基于 信号量
+     * @return
+     */
     @Override
     public boolean isExecutedInThread() {
         return isolationStrategy == HystrixCommandProperties.ExecutionIsolationStrategy.THREAD;
     }
 
+    /**
+     * 开始执行就代表没有被线程池拒绝
+     * @return
+     */
     @Override
     public boolean isResponseThreadPoolRejected() {
         return false;

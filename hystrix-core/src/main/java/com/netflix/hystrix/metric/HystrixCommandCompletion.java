@@ -26,13 +26,31 @@ import java.util.List;
 
 /**
  * Data class which gets fed into event stream when a command completes (with any of the outcomes in {@link HystrixEventType}).
+ * 命令完成时的事件对象
  */
 public class HystrixCommandCompletion extends HystrixCommandEvent {
+
+    /**
+     * 执行结果对象
+     */
     protected final ExecutionResult executionResult;
+    /**
+     * 请求上下文对象
+     */
     protected final HystrixRequestContext requestContext;
 
+    /**
+     * 存放所有事件类型的 数组对象
+     */
     private final static HystrixEventType[] ALL_EVENT_TYPES = HystrixEventType.values();
 
+    /**
+     * 针对普通的事件对象 增加了 requestContext 以及 ExecutionResult
+     * @param executionResult
+     * @param commandKey
+     * @param threadPoolKey
+     * @param requestContext
+     */
     HystrixCommandCompletion(ExecutionResult executionResult, HystrixCommandKey commandKey,
                              HystrixThreadPoolKey threadPoolKey, HystrixRequestContext requestContext) {
         super(commandKey, threadPoolKey);
@@ -41,18 +59,36 @@ public class HystrixCommandCompletion extends HystrixCommandEvent {
     }
 
     public static HystrixCommandCompletion from(ExecutionResult executionResult, HystrixCommandKey commandKey, HystrixThreadPoolKey threadPoolKey) {
-        return from(executionResult, commandKey, threadPoolKey, HystrixRequestContext.getContextForCurrentThread());
+        return from(executionResult, commandKey, threadPoolKey,
+                // 获取本线程对应的 requestContext 对象
+                HystrixRequestContext.getContextForCurrentThread());
     }
 
+    /**
+     * 使用参数生成对应的 command 对象
+     * @param executionResult
+     * @param commandKey
+     * @param threadPoolKey
+     * @param requestContext
+     * @return
+     */
     public static HystrixCommandCompletion from(ExecutionResult executionResult, HystrixCommandKey commandKey, HystrixThreadPoolKey threadPoolKey, HystrixRequestContext requestContext) {
         return new HystrixCommandCompletion(executionResult, commandKey, threadPoolKey, requestContext);
     }
 
+    /**
+     * 从执行结果中判断是否 被线程池拒绝
+     * @return
+     */
     @Override
     public boolean isResponseThreadPoolRejected() {
         return executionResult.isResponseThreadPoolRejected();
     }
 
+    /**
+     * 因为已经执行完成了 所以这里返回false
+     * @return
+     */
     @Override
     public boolean isExecutionStart() {
         return false;
@@ -63,23 +99,43 @@ public class HystrixCommandCompletion extends HystrixCommandEvent {
         return executionResult.isExecutedInThread();
     }
 
+    /**
+     * 是否完成 返回true
+     * @return
+     */
     @Override
     public boolean isCommandCompletion() {
         return true;
     }
 
+    /**
+     * 获取请求上下文对象
+     * @return
+     */
     public HystrixRequestContext getRequestContext() {
         return this.requestContext;
     }
 
+    /**
+     * 获取事件数量
+     * @return
+     */
     public ExecutionResult.EventCounts getEventCounts() {
         return executionResult.getEventCounts();
     }
 
+    /**
+     * 获取执行延迟
+     * @return
+     */
     public long getExecutionLatency() {
         return executionResult.getExecutionLatency();
     }
 
+    /**
+     * 获取用户线程延迟
+     * @return
+     */
     public long getTotalLatency() {
         return executionResult.getUserThreadLatency();
     }

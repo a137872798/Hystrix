@@ -471,6 +471,7 @@ public class HystrixRollingNumber {
 
     /**
      * Cumulative counters (from start of JVM) from each Type
+     * 针对每个事件类型 记录 max or sum
      */
     /* package */static class CumulativeSum {
         final LongAdder[] adderForCounterType;
@@ -485,6 +486,8 @@ public class HystrixRollingNumber {
              * as we want to keep using the type.ordinal() value for fast random access.
              */
 
+            // 将枚举值按照不同的类型 设置到不同的数组中
+
             // initialize the array of LongAdders
             adderForCounterType = new LongAdder[HystrixRollingNumberEvent.values().length];
             for (HystrixRollingNumberEvent type : HystrixRollingNumberEvent.values()) {
@@ -498,11 +501,16 @@ public class HystrixRollingNumber {
                 if (type.isMaxUpdater()) {
                     updaterForCounterType[type.ordinal()] = new LongMaxUpdater();
                     // initialize to 0 otherwise it is Long.MIN_VALUE
+                    // 创建update对象后 将 初始值 设置为 0
                     updaterForCounterType[type.ordinal()].update(0);
                 }
             }
         }
 
+        /**
+         * 将 bucket 中的数据 填充到 event 中
+         * @param lastBucket
+         */
         public void addBucket(Bucket lastBucket) {
             for (HystrixRollingNumberEvent type : HystrixRollingNumberEvent.values()) {
                 if (type.isCounter()) {
@@ -514,6 +522,11 @@ public class HystrixRollingNumber {
             }
         }
 
+        /**
+         * 根据事件 获取对应的值 可能是 max or sum
+         * @param type
+         * @return
+         */
         long get(HystrixRollingNumberEvent type) {
             if (type.isCounter()) {
                 return adderForCounterType[type.ordinal()].sum();
@@ -524,6 +537,11 @@ public class HystrixRollingNumber {
             throw new IllegalStateException("Unknown type of event: " + type.name());
         }
 
+        /**
+         * 根据事件 ordinal 返回对应的 LongAdder
+         * @param type
+         * @return
+         */
         LongAdder getAdder(HystrixRollingNumberEvent type) {
             if (!type.isCounter()) {
                 throw new IllegalStateException("Type is not a Counter: " + type.name());
@@ -531,6 +549,11 @@ public class HystrixRollingNumber {
             return adderForCounterType[type.ordinal()];
         }
 
+        /**
+         * 根据事件 ordinal 返回对应的 LongMaxUpdater
+         * @param type
+         * @return
+         */
         LongMaxUpdater getMaxUpdater(HystrixRollingNumberEvent type) {
             if (!type.isMaxUpdater()) {
                 throw new IllegalStateException("Type is not a MaxUpdater: " + type.name());

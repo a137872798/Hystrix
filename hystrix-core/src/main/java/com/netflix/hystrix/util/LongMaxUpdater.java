@@ -71,6 +71,8 @@ public class LongMaxUpdater extends Striped64 implements Serializable {
     public void update(long x) {
         Cell[] as; long b, v; HashCode hc; Cell a; int n;
         if ((as = cells) != null ||
+                // 一开始 base的值为 Long.MIN_VALUE 所以很容易满足前个条件
+                // 这里会使用cas 更新 b 失败的情况下 才会走 括号中的逻辑  这里更新失败先不看
             (b = base) < x && !casBase(b, x)) {
             boolean uncontended = true;
             int h = (hc = threadHashCode.get()).code;

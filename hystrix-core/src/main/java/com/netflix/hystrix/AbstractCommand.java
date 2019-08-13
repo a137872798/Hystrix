@@ -58,7 +58,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 命令对象 骨架类
+ * 命令对象 骨架类 hystrix 的2个核心类都是 继承这个类
  * @param <R>
  */
 
@@ -66,7 +66,7 @@ import java.util.concurrent.atomic.AtomicReference;
     private static final Logger logger = LoggerFactory.getLogger(AbstractCommand.class);
 
     /**
-     * 熔断器
+     * 断路器
      */
     protected final HystrixCircuitBreaker circuitBreaker;
     /**
@@ -190,11 +190,12 @@ import java.util.concurrent.atomic.AtomicReference;
      */
     protected final TryableSemaphore executionSemaphoreOverride;
     /* each circuit has a semaphore to restrict concurrent fallback execution */
+    // 静态成员变量配合 缓存容器
     protected static final ConcurrentHashMap<String, TryableSemaphore> executionSemaphorePerCircuit = new ConcurrentHashMap<String, TryableSemaphore>();
     /* END EXECUTION Semaphore */
 
     /**
-     * 超时监听器对象
+     * 时间监听器对象 内部只有一个 获取下次 嘀嗒的时间间隔
      */
     protected final AtomicReference<Reference<TimerListener>> timeoutTimer = new AtomicReference<Reference<TimerListener>>();
 
@@ -232,28 +233,44 @@ import java.util.concurrent.atomic.AtomicReference;
     protected volatile long commandStartTimestamp = -1L;
 
     /* If this command executed and timed-out */
+    // 超时状态的 原子引用
     protected final AtomicReference<TimedOutStatus> isCommandTimedOut = new AtomicReference<TimedOutStatus>(TimedOutStatus.NOT_EXECUTED);
+    /**
+     * 0参数的 回调对象
+     */
     protected volatile Action0 endCurrentThreadExecutingCommand;
 
     /**
      * Instance of RequestCache logic
+     * 请求缓存对象
      */
     protected final HystrixRequestCache requestCache;
+    /**
+     * 请求日志
+     */
     protected final HystrixRequestLog currentRequestLog;
 
     // this is a micro-optimization but saves about 1-2microseconds (on 2011 MacBook Pro) 
     // on the repetitive string processing that will occur on the same classes over and over again
+    /**
+     *  默认的缓存对象  class 为key value 为 class.simpleClass
+     */
     private static ConcurrentHashMap<Class<?>, String> defaultNameCache = new ConcurrentHashMap<Class<?>, String>();
 
+    /**
+     * 回退命令容器 ???
+     */
     protected static ConcurrentHashMap<HystrixCommandKey, Boolean> commandContainsFallback = new ConcurrentHashMap<HystrixCommandKey, Boolean>();
 
     /* package */static String getDefaultNameFromClass(Class<?> cls) {
+        // 传入class 对象获取缓存键
         String fromCache = defaultNameCache.get(cls);
         if (fromCache != null) {
             return fromCache;
         }
         // generate the default
         // default HystrixCommandKey to use if the method is not overridden
+        // 截取后存入
         String name = cls.getSimpleName();
         if (name.equals("")) {
             // we don't have a SimpleName (anonymous inner class) so use the full class name
@@ -264,6 +281,21 @@ import java.util.concurrent.atomic.AtomicReference;
         return name;
     }
 
+    /**
+     * 构建 command 骨架类
+     * @param group 该对象也是只有一个name 属性
+     * @param key 该对象就一个name 属性
+     * @param threadPoolKey 也是只有一个name 属性
+     * @param circuitBreaker
+     * @param threadPool
+     * @param commandPropertiesDefaults
+     * @param threadPoolPropertiesDefaults
+     * @param metrics
+     * @param fallbackSemaphore
+     * @param executionSemaphore
+     * @param propertiesStrategy
+     * @param executionHook
+     */
     protected AbstractCommand(HystrixCommandGroupKey group, HystrixCommandKey key, HystrixThreadPoolKey threadPoolKey, HystrixCircuitBreaker circuitBreaker, HystrixThreadPool threadPool,
             HystrixCommandProperties.Setter commandPropertiesDefaults, HystrixThreadPoolProperties.Setter threadPoolPropertiesDefaults,
             HystrixCommandMetrics metrics, TryableSemaphore fallbackSemaphore, TryableSemaphore executionSemaphore,
