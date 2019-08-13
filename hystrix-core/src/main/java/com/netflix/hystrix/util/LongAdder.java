@@ -78,6 +78,7 @@ public class LongAdder extends Striped64 implements Serializable {
     public void add(long x) {
         Cell[] as; long b, v; HashCode hc; Cell a; int n;
         if ((as = cells) != null || !casBase(b = base, b + x)) {
+            // 下面的就可以看成是 重试策略 一般 上面的 casBase 就会直接成功
             boolean uncontended = true;
             int h = (hc = threadHashCode.get()).code;
             if (as == null || (n = as.length) < 1 ||

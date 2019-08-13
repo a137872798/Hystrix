@@ -54,19 +54,19 @@ public class HystrixRollingNumber {
      */
     private static final Time ACTUAL_TIME = new ActualTime();
     /**
-     * 时间接口
+     * 时间接口 一般会被设置 一个 ActualTime 对象
      */
     private final Time time;
     /**
-     * 当前时间 以毫秒为单位
+     * 时间单位 必须要 是 bucket 的整数倍
      */
     final int timeInMilliseconds;
     /**
-     * 当前桶数
+     * 桶的总数
      */
     final int numberOfBuckets;
     /**
-     * 多少毫秒算一个桶 ???
+     * 每个桶中 有多少毫秒 配合 windowStart 使用 代表进入下个桶
      */
     final int bucketSizeInMillseconds;
 
@@ -74,6 +74,9 @@ public class HystrixRollingNumber {
      * 桶数组 每个元素都是一个桶对象
      */
     final BucketCircularArray buckets;
+    /**
+     * 该对象内部就是 维护了一个数组 中间的元素保存了 每个事件对应的 数值 调用 addBucket 时 根据类型 调用 add 或 update
+     */
     private final CumulativeSum cumulativeSum = new CumulativeSum();
 
     /**
@@ -89,20 +92,34 @@ public class HystrixRollingNumber {
         this(timeInMilliseconds.get(), numberOfBuckets.get());
     }
 
+    /**
+     * 初始化时 就传入桶的数量 和 时间单位
+     * @param timeInMilliseconds
+     * @param numberOfBuckets
+     */
     public HystrixRollingNumber(int timeInMilliseconds, int numberOfBuckets) {
         this(ACTUAL_TIME, timeInMilliseconds, numberOfBuckets);
     }
 
+    /**
+     * 初始化 统计对象
+     * @param time
+     * @param timeInMilliseconds
+     * @param numberOfBuckets
+     */
     /* package for testing */ HystrixRollingNumber(Time time, int timeInMilliseconds, int numberOfBuckets) {
         this.time = time;
         this.timeInMilliseconds = timeInMilliseconds;
         this.numberOfBuckets = numberOfBuckets;
 
+        // 必须要被桶数整除
         if (timeInMilliseconds % numberOfBuckets != 0) {
             throw new IllegalArgumentException("The timeInMilliseconds must divide equally into numberOfBuckets. For example 1000/10 is ok, 1000/11 is not.");
         }
+        // 每个桶中 装了多少 毫秒
         this.bucketSizeInMillseconds = timeInMilliseconds / numberOfBuckets;
 
+        // 创建对应的 bucket 数组对象
         buckets = new BucketCircularArray(numberOfBuckets);
     }
 
@@ -113,6 +130,7 @@ public class HystrixRollingNumber {
      * 
      * @param type
      *            HystrixRollingNumberEvent defining which counter to increment
+     *            将数值加到 当前的 bucket 中 默认情况下  + 1
      */
     public void increment(HystrixRollingNumberEvent type) {
         getCurrentBucket().getAdder(type).increment();
@@ -127,6 +145,7 @@ public class HystrixRollingNumber {
      *            HystrixRollingNumberEvent defining which counter to add to
      * @param value
      *            long value to be added to the current bucket
+     *            增加指定的值
      */
     public void add(HystrixRollingNumberEvent type, long value) {
         getCurrentBucket().getAdder(type).add(value);
@@ -139,6 +158,7 @@ public class HystrixRollingNumber {
      * 
      * @param type  HystrixRollingNumberEvent defining which counter to retrieve values from
      * @param value long value to be given to the max updater
+     *              更新成指定的值
      */
     public void updateRollingMax(HystrixRollingNumberEvent type, long value) {
         getCurrentBucket().getMaxUpdater(type).update(value);
@@ -148,6 +168,7 @@ public class HystrixRollingNumber {
      * Force a reset of all rolling counters (clear all buckets) so that statistics start being gathered from scratch.
      * <p>
      * This does NOT reset the CumulativeSum values.
+     * 重置桶
      */
     public void reset() {
         // if we are resetting, that means the lastBucket won't have a chance to be captured in CumulativeSum, so let's do it here
@@ -169,6 +190,7 @@ public class HystrixRollingNumber {
      * 
      * @param type HystrixRollingNumberEvent defining which counter to retrieve values from
      * @return cumulative sum of all increments and adds for the given {@link HystrixRollingNumberEvent} counter type
+     * 将当前bucket 的数值 加上 总计的数值
      */
     public long getCumulativeSum(HystrixRollingNumberEvent type) {
         // this isn't 100% atomic since multiple threads can be affecting latestBucket & cumulativeSum independently
@@ -186,6 +208,7 @@ public class HystrixRollingNumber {
      *            HystrixRollingNumberEvent defining which counter to retrieve values from
      * @return
      *         value from the given {@link HystrixRollingNumberEvent} counter type
+     *         求 buckets 的总和
      */
     public long getRollingSum(HystrixRollingNumberEvent type) {
         Bucket lastBucket = getCurrentBucket();
@@ -208,6 +231,7 @@ public class HystrixRollingNumber {
      *            HystrixRollingNumberEvent defining which counter to retrieve value from
      * @return
      *         value from latest bucket for given {@link HystrixRollingNumberEvent} counter type
+     *         获取当前桶对象的数值
      */
     public long getValueOfLatestBucket(HystrixRollingNumberEvent type) {
         Bucket lastBucket = getCurrentBucket();
@@ -227,9 +251,12 @@ public class HystrixRollingNumber {
      * @param type
      *            HystrixRollingNumberEvent defining which counter to retrieve values from
      * @return array of values from each of the rolling buckets for given {@link HystrixRollingNumberEvent} counter type
+     * 获取传入event 的值 获取对应数据的 总和 或者最大值
      */
     public long[] getValues(HystrixRollingNumberEvent type) {
+        // 获取当前bucket 对象
         Bucket lastBucket = getCurrentBucket();
+        // 没有找到 bucket 对象的情况下 返回空 数组
         if (lastBucket == null)
             return new long[0];
 
@@ -257,20 +284,30 @@ public class HystrixRollingNumber {
      * @param type
      *            HystrixRollingNumberEvent defining which "max updater" to retrieve values from
      * @return max value for given {@link HystrixRollingNumberEvent} type during rolling window
+     * 获取最大值
      */
     public long getRollingMaxValue(HystrixRollingNumberEvent type) {
         long values[] = getValues(type);
         if (values.length == 0) {
             return 0;
         } else {
+            // 将结果排序后 返回最大值 如果事件类型对应 max 就是直接返回 最大值 否则是 返回 add 累加后最大值
             Arrays.sort(values);
             return values[values.length - 1];
         }
     }
 
+    /**
+     * 针对 bucket 的Lock
+     */
     private ReentrantLock newBucketLock = new ReentrantLock();
 
+    /**
+     * 获取当前的桶对象
+     * @return
+     */
     /* package for testing */Bucket getCurrentBucket() {
+        // 获取当前时间
         long currentTime = time.getCurrentTimeInMillis();
 
         /* a shortcut to try and get the most common result of immediately finding the current bucket */
@@ -279,8 +316,10 @@ public class HystrixRollingNumber {
          * Retrieve the latest bucket if the given time is BEFORE the end of the bucket window, otherwise it returns NULL.
          * 
          * NOTE: This is thread-safe because it's accessing 'buckets' which is a LinkedBlockingDeque
+         * 返回 最后一个 对象
          */
         Bucket currentBucket = buckets.peekLast();
+        // 代表在这个桶所在的 时间范围内
         if (currentBucket != null && currentTime < currentBucket.windowStart + this.bucketSizeInMillseconds) {
             // if we're within the bucket 'window of time' return the current one
             // NOTE: We do not worry if we are BEFORE the window in a weird case of where thread scheduling causes that to occur,
@@ -311,25 +350,31 @@ public class HystrixRollingNumber {
          * can retrieve the sum while this is all happening. The trade-off is that we don't maintain the rolling sum and let readers just iterate
          * bucket to calculate the sum themselves. This is an example of favoring write-performance instead of read-performance and how the tryLock
          * versus a synchronized block needs to be accommodated.
+         * 代表 需要创建一个新的桶 对象 这里防止并发创建 就要使用 reentrantLock
          */
         if (newBucketLock.tryLock()) {
             try {
+                // 如果还没创建 就创建一个新的桶对象 这个应该是 该buckets 还是空的时候的情况
                 if (buckets.peekLast() == null) {
                     // the list is empty so create the first bucket
+                    // 将当前时间 作为 windowstart 并追加到 buckets中
                     Bucket newBucket = new Bucket(currentTime);
                     buckets.addLast(newBucket);
                     return newBucket;
                 } else {
                     // We go into a loop so that it will create as many buckets as needed to catch up to the current time
                     // as we want the buckets complete even if we don't have transactions during a period of time.
+                    // numberOfBuckets 代表 本 buckets 的总大小
                     for (int i = 0; i < numberOfBuckets; i++) {
                         // we have at least 1 bucket so retrieve it
                         Bucket lastBucket = buckets.peekLast();
+                        // 双重验证 避免在 加锁成功时 已经被设置了 最新的 lastBucket
                         if (currentTime < lastBucket.windowStart + this.bucketSizeInMillseconds) {
                             // if we're within the bucket 'window of time' return the current one
                             // NOTE: We do not worry if we are BEFORE the window in a weird case of where thread scheduling causes that to occur,
                             // we'll just use the latest as long as we're not AFTER the window
                             return lastBucket;
+                            // 代表整个 buckets 的时间 都已经过期了 数据需要重置
                         } else if (currentTime - (lastBucket.windowStart + this.bucketSizeInMillseconds) > timeInMilliseconds) {
                             // the time passed is greater than the entire rolling counter so we want to clear it all and start from scratch
                             reset();
@@ -337,18 +382,22 @@ public class HystrixRollingNumber {
                             return getCurrentBucket();
                         } else { // we're past the window so we need to create a new bucket
                             // create a new bucket and add it as the new 'last'
+                            // 代表buckets 的元素还没有填满 这里就创建新的 bucket 并追加到 buckets中
                             buckets.addLast(new Bucket(lastBucket.windowStart + this.bucketSizeInMillseconds));
                             // add the lastBucket values to the cumulativeSum
+                            // 更新总值
                             cumulativeSum.addBucket(lastBucket);
                         }
                     }
                     // we have finished the for-loop and created all of the buckets, so return the lastBucket now
+                    // 获取最新的bucket last 并返回
                     return buckets.peekLast();
                 }
             } finally {
                 newBucketLock.unlock();
             }
         } else {
+            // 代表其他线程应该会生成这个对象
             currentBucket = buckets.peekLast();
             if (currentBucket != null) {
                 // we didn't get the lock so just return the latest bucket while another thread creates the next one
@@ -356,6 +405,7 @@ public class HystrixRollingNumber {
             } else {
                 // the rare scenario where multiple threads raced to create the very first bucket
                 // wait slightly and then use recursion while the other thread finishes creating a bucket
+                // 自旋
                 try {
                     Thread.sleep(5);
                 } catch (Exception e) {
@@ -391,7 +441,7 @@ public class HystrixRollingNumber {
      */
     /* package */static class Bucket {
         /**
-         * 窗口 开始 ???
+         * 被 bucket 窗口的 进入时间
          */
         final long windowStart;
         /**
@@ -514,9 +564,11 @@ public class HystrixRollingNumber {
         public void addBucket(Bucket lastBucket) {
             for (HystrixRollingNumberEvent type : HystrixRollingNumberEvent.values()) {
                 if (type.isCounter()) {
+                    // LongAdder 就是将 数值以 CAS 方式增加
                     getAdder(type).add(lastBucket.getAdder(type).sum());
                 }
                 if (type.isMaxUpdater()) {
+                    // CAS 更新
                     getMaxUpdater(type).update(lastBucket.getMaxUpdater(type).max());
                 }
             }
