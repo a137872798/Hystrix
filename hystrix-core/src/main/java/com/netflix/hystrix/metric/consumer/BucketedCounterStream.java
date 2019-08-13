@@ -35,9 +35,16 @@ import java.util.concurrent.atomic.AtomicReference;
  * @param <Event> type of raw data that needs to get summarized into a bucket
  * @param <Bucket> type of data contained in each bucket
  * @param <Output> type of data emitted to stream subscribers (often is the same as A but does not have to be)
+ *                桶计数流 传入的事件对象 必须同时满足3个接口  该抽象类暴露了 bucket 以及为 bucket 提供数据流
  */
 public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, Output> {
+    /**
+     * 桶数量
+     */
     protected final int numBuckets;
+    /**
+     * 生成桶 的 流
+     */
     protected final Observable<Bucket> bucketedStream;
     protected final AtomicReference<Subscription> subscription = new AtomicReference<Subscription>(null);
 

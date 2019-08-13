@@ -52,11 +52,11 @@ public class ExecutionResult {
      */
     private final int executionLatency; //time spent in run() method
     /**
-     * 用户线程延迟 ???
+     * 用户线程延迟  代表从提交任务开始 到任务结束的时长
      */
     private final int userThreadLatency; //time elapsed between caller thread submitting request and response being visible to it
     /**
-     * 是否正常执行 ???
+     * 是否出现did
      */
     private final boolean executionOccurred;
     /**
@@ -73,6 +73,7 @@ public class ExecutionResult {
      */
     private static final HystrixEventType[] ALL_EVENT_TYPES = HystrixEventType.values();
     private static final int NUM_EVENT_TYPES = ALL_EVENT_TYPES.length;
+    // 2个 固定的位图对象
     private static final BitSet EXCEPTION_PRODUCING_EVENTS = new BitSet(NUM_EVENT_TYPES);
     private static final BitSet TERMINAL_EVENTS = new BitSet(NUM_EVENT_TYPES);
 
@@ -108,13 +109,23 @@ public class ExecutionResult {
         private final int numCollapsed;
 
         EventCounts() {
-            // 允许存放的数量
+            // 这里就存放了 所有的 hystrixEventType
             this.events = new BitSet(NUM_EVENT_TYPES);
+            // 默认发行数量为0
             this.numEmissions = 0;
+            // 默认回退数量为0
             this.numFallbackEmissions = 0;
+            // 碰撞数为0
             this.numCollapsed = 0;
         }
 
+        /**
+         * 通过指定 事件对象 (位图) 次数 来创建
+         * @param events
+         * @param numEmissions
+         * @param numFallbackEmissions
+         * @param numCollapsed
+         */
         EventCounts(BitSet events, int numEmissions, int numFallbackEmissions, int numCollapsed) {
             this.events = events;
             this.numEmissions = numEmissions;
@@ -122,25 +133,34 @@ public class ExecutionResult {
             this.numCollapsed = numCollapsed;
         }
 
+        /**
+         * 通过枚举事件类初始化  应该是在执行过程中产生的一系列 事件 用来初始化该对象
+         * @param eventTypes
+         */
         EventCounts(HystrixEventType... eventTypes) {
+            // 这里长度固定了 总是使用 HystrixEventType
             BitSet newBitSet = new BitSet(NUM_EVENT_TYPES);
             int localNumEmits = 0;
             int localNumFallbackEmits = 0;
             int localNumCollapsed = 0;
             for (HystrixEventType eventType: eventTypes) {
                 switch (eventType) {
+                    // 如果是 发出 给对应的  位 设置对象 并增加统计的 emit 数
                     case EMIT:
                         newBitSet.set(HystrixEventType.EMIT.ordinal());
                         localNumEmits++;
                         break;
+                    // 回退时 发出 的事件
                     case FALLBACK_EMIT:
                         newBitSet.set(HystrixEventType.FALLBACK_EMIT.ordinal());
                         localNumFallbackEmits++;
                         break;
+                    // 如果是碰撞事件
                     case COLLAPSED:
                         newBitSet.set(HystrixEventType.COLLAPSED.ordinal());
                         localNumCollapsed++;
                         break;
+                    // 其他情况就按照该枚举的 顺序来设置对应的位图
                     default:
                         newBitSet.set(eventType.ordinal());
                         break;
@@ -152,12 +172,20 @@ public class ExecutionResult {
             this.numCollapsed = localNumCollapsed;
         }
 
+        /**
+         * 传入 指定事件 应该是将 数据添加到当前 EventCount 中
+         * @param eventType
+         * @return
+         */
         EventCounts plus(HystrixEventType eventType) {
             return plus(eventType, 1);
         }
 
         EventCounts plus(HystrixEventType eventType, int count) {
+            // 拷贝当前 events 副本对象
             BitSet newBitSet = (BitSet) events.clone();
+
+            // 计算 emit/fallbackEmit/collapse 事件数量
             int localNumEmits = numEmissions;
             int localNumFallbackEmits =  numFallbackEmissions;
             int localNumCollapsed = numCollapsed;
@@ -178,17 +206,33 @@ public class ExecutionResult {
                     newBitSet.set(eventType.ordinal());
                     break;
             }
+            // 返回一个全新对象
             return new EventCounts(newBitSet, localNumEmits, localNumFallbackEmits, localNumCollapsed);
         }
 
+        /**
+         * 判断 位图中是否存在该对象
+         * @param eventType
+         * @return
+         */
         public boolean contains(HystrixEventType eventType) {
             return events.get(eventType.ordinal());
         }
 
+        /**
+         * 代表 只要2个 位图对象 有任何一位是 一样的
+         * @param other
+         * @return
+         */
         public boolean containsAnyOf(BitSet other) {
             return events.intersects(other);
         }
 
+        /**
+         * 根据 事件类型 获取对应的计数
+         * @param eventType
+         * @return
+         */
         public int getCount(HystrixEventType eventType) {
             switch (eventType) {
                 case EMIT: return numEmissions;
@@ -233,6 +277,18 @@ public class ExecutionResult {
         }
     }
 
+    /**
+     * 就是传入 各个 成员变量 进行初始化
+     * @param eventCounts
+     * @param startTimestamp
+     * @param executionLatency
+     * @param userThreadLatency
+     * @param failedExecutionException
+     * @param executionException
+     * @param executionOccurred
+     * @param isExecutedInThread
+     * @param collapserKey
+     */
     private ExecutionResult(EventCounts eventCounts, long startTimestamp, int executionLatency,
                             int userThreadLatency, Exception failedExecutionException, Exception executionException,
                             boolean executionOccurred, boolean isExecutedInThread, HystrixCollapserKey collapserKey) {
@@ -250,6 +306,11 @@ public class ExecutionResult {
     // we can return a static version since it's immutable
     static ExecutionResult EMPTY = ExecutionResult.from();
 
+    /**
+     * 一旦出现了 did 就 标识 didOccur 并初始化 对象
+     * @param eventTypes
+     * @return
+     */
     public static ExecutionResult from(HystrixEventType... eventTypes) {
         boolean didExecutionOccur = false;
         for (HystrixEventType eventType: eventTypes) {
@@ -260,6 +321,11 @@ public class ExecutionResult {
         return new ExecutionResult(new EventCounts(eventTypes), -1L, -1, -1, null, null, didExecutionOccur, false, null);
     }
 
+    /**
+     * 出现以下 枚举 就代表 orrurDid == true
+     * @param eventType
+     * @return
+     */
     private static boolean didExecutionOccur(HystrixEventType eventType) {
         switch (eventType) {
             case SUCCESS: return true;
@@ -270,6 +336,8 @@ public class ExecutionResult {
             default: return false;
         }
     }
+
+    //  下面不同的方法 会返回不同的 ExecutionResult 对象
 
     public ExecutionResult setExecutionOccurred() {
         return new ExecutionResult(eventCounts, startTimestamp, executionLatency, userThreadLatency,

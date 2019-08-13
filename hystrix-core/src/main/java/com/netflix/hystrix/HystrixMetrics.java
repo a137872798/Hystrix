@@ -25,7 +25,7 @@ import com.netflix.hystrix.util.HystrixRollingNumberEvent;
 public abstract class HystrixMetrics {
 
     /**
-     * 测量计数器
+     * 测量计数器 内部 存放了 bucket 现在还不知道怎么使用
      */
     protected final HystrixRollingNumber counter;
 
@@ -42,7 +42,7 @@ public abstract class HystrixMetrics {
      * @param event
      *            {@link HystrixRollingNumberEvent} of the event to retrieve a sum for
      * @return long cumulative count
-     * 获取 该事件的计数器
+     * 计算最后一个桶 + 当前event 的统计值
      */
     public long getCumulativeCount(HystrixRollingNumberEvent event) {
         return counter.getCumulativeSum(event);
@@ -56,6 +56,7 @@ public abstract class HystrixMetrics {
      * @param event
      *            {@link HystrixRollingNumberEvent} of the event to retrieve a sum for
      * @return long rolling count
+     * 计算每个桶 + 当前event 的统计值
      */
     public long getRollingCount(HystrixRollingNumberEvent event) {
         return counter.getRollingSum(event);

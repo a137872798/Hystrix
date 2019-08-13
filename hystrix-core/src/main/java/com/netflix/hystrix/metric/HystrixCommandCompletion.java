@@ -117,7 +117,7 @@ public class HystrixCommandCompletion extends HystrixCommandEvent {
     }
 
     /**
-     * 获取事件数量
+     * 获取事件数量  返回 ExecutionResult.EventCounts 对象
      * @return
      */
     public ExecutionResult.EventCounts getEventCounts() {
@@ -125,7 +125,7 @@ public class HystrixCommandCompletion extends HystrixCommandEvent {
     }
 
     /**
-     * 获取执行延迟
+     * 获取result 对象中的执行延迟
      * @return
      */
     public long getExecutionLatency() {
@@ -140,6 +140,10 @@ public class HystrixCommandCompletion extends HystrixCommandEvent {
         return executionResult.getUserThreadLatency();
     }
 
+    /**
+     * 是否出现了 did 命令
+     * @return
+     */
     @Override
     public boolean didCommandExecute() {
         return executionResult.executionOccurred();

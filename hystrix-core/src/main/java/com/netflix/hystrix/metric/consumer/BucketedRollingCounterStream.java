@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @param <Event> type of raw data that needs to get summarized into a bucket
  * @param <Bucket> type of data contained in each bucket
  * @param <Output> type of data emitted to stream subscribers (often is the same as A but does not have to be)
+ *                bucket 滚动计数流 ???
  */
 public abstract class BucketedRollingCounterStream<Event extends HystrixEvent, Bucket, Output> extends BucketedCounterStream<Event, Bucket, Output> {
     private Observable<Output> sourceStream;

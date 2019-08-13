@@ -449,7 +449,7 @@ public class HystrixRollingNumber {
          */
         final LongAdder[] adderForCounterType;
         /**
-         * 最大值更新???
+         * 最大值
          */
         final LongMaxUpdater[] updaterForCounterType;
 
@@ -625,50 +625,88 @@ public class HystrixRollingNumber {
      * methods are NOT thread-safe for external access they depend upon the lock.tryLock() protection in <code>getCurrentBucket</code> which ensures only a single thread will access them at at time.
      * <p>
      * benjchristensen => This implementation was chosen based on performance testing I did and documented at: http://benjchristensen.com/2011/10/08/atomiccirculararray/
-     * 桶数组对象
+     * 桶数组对象 内部维护了一个 bucket 列表
      * /
     /* package */static class BucketCircularArray implements Iterable<Bucket> {
+        /**
+         * ListState 内部就是 BucketArray 对象
+         */
         private final AtomicReference<ListState> state;
+        /**
+         * 数组大小 一般是 numBuckets + 1
+         */
         private final int dataLength; // we don't resize, we always stay the same, so remember this
+        /**
+         * 该数组对象有多少个 bucket
+         */
         private final int numBuckets;
 
         /**
          * Immutable object that is atomically set every time the state of the BucketCircularArray changes
          * <p>
          * This handles the compound operations
-         * bucket 对象被包裹在里面
+         * 该对象内部有一个 bucket 数组对象
          */
         private class ListState {
             /*
              * this is an AtomicReferenceArray and not a normal Array because we're copying the reference
              * between ListState objects and multiple threads could maintain references across these
              * compound operations so I want the visibility/concurrency guarantees
+             * bucket 数组 对象 每个bucket 对象内部有2个数组 对应到 hystrix 的状态
              */
             private final AtomicReferenceArray<Bucket> data;
+            /**
+             * data.size + 1 还不清楚 为什么大小要加 1
+             */
             private final int size;
+            /**
+             * 尾节点 对应的下标
+             */
             private final int tail;
+            /**
+             * 头节点下标
+             */
             private final int head;
 
+            /**
+             * 初始化 ListState 对象
+             * @param data
+             * @param head
+             * @param tail
+             */
             private ListState(AtomicReferenceArray<Bucket> data, int head, int tail) {
                 this.head = head;
                 this.tail = tail;
+                // 代表 size 为0  一般情况下走上面  因为这时 dataLength 还没有被初始化
                 if (head == 0 && tail == 0) {
                     size = 0;
                 } else {
+                    // 该对象自身 的方法还会创建 ListState 对象 这时  dataLength 就会设置了
                     this.size = (tail + dataLength - head) % dataLength;
                 }
+                // 设置 数组对象
                 this.data = data;
             }
 
+            /**
+             * 尝试获取尾节点
+             * @return
+             */
             public Bucket tail() {
+                // 在还没有 任何元素的时候 返回null
                 if (size == 0) {
                     return null;
                 } else {
                     // we want to get the last item, so size()-1
+                    // 因为 size 为 bucket 总数 +1 所以这里要 -1  这个size 看来是有可能超过 bucket 总长的 这里使用取余的方式来计算
                     return data.get(convert(size - 1));
                 }
             }
 
+            /**
+             * 获取内部的 bucketArray对象
+             * @return
+             */
             private Bucket[] getArray() {
                 /*
                  * this isn't technically thread-safe since it requires multiple reads on something that can change
@@ -677,26 +715,43 @@ public class HystrixRollingNumber {
                  */
                 ArrayList<Bucket> array = new ArrayList<Bucket>();
                 for (int i = 0; i < size; i++) {
+                    // 挨个求得 逻辑index 后 从数组中取出元素并设置到这个数组中
                     array.add(data.get(convert(i)));
                 }
                 return array.toArray(new Bucket[array.size()]);
             }
 
+            /**
+             * 增加 尾节点元素
+             * @return
+             */
             private ListState incrementTail() {
                 /* if incrementing results in growing larger than 'length' which is the max we should be at, then also increment head (equivalent of removeFirst but done atomically) */
+                // 一般是不等的 numBuckets 代表 数组的长度
                 if (size == numBuckets) {
                     // increment tail and head
+                    // 用原来的data 对象生成一个新的 ListState
                     return new ListState(data, (head + 1) % dataLength, (tail + 1) % dataLength);
                 } else {
                     // increment only tail
+                    // 不等的情况下只增加尾部
                     return new ListState(data, head, (tail + 1) % dataLength);
                 }
             }
 
+            /**
+             * 重新返回了一个空对象
+             * @return
+             */
             public ListState clear() {
                 return new ListState(new AtomicReferenceArray<Bucket>(dataLength), 0, 0);
             }
 
+            /**
+             * 添加一个新的 bucket 对象到数组中
+             * @param b
+             * @return
+             */
             public ListState addBucket(Bucket b) {
                 /*
                  * We could in theory have 2 threads addBucket concurrently and this compound operation would interleave.
@@ -708,8 +763,10 @@ public class HystrixRollingNumber {
                  * In either case, a single Bucket will be returned as "last" and data loss should not occur and everything keeps in sync for head/tail.
                  * <p>
                  * Also, it's fine to set it before incrementTail because nothing else should be referencing that index position until incrementTail occurs.
+                 * 在 tail 的位置设置新的元素 一个新对象 tail 和 head 都是0
                  */
                 data.set(tail, b);
+                // 因为添加了一个元素 要扩充 返回了一个 head 为 0 tail 为1 的对象
                 return incrementTail();
             }
 
@@ -720,13 +777,24 @@ public class HystrixRollingNumber {
             }
         }
 
+        /**
+         * buckets 数组对象
+         * @param size
+         */
         BucketCircularArray(int size) {
+            // 创建了 一个 大小 大于给定size 的数组对象  该对象会被包裹在 listState 对象中
             AtomicReferenceArray<Bucket> _buckets = new AtomicReferenceArray<Bucket>(size + 1); // + 1 as extra room for the add/remove;
+            // 创建一个空对象
             state = new AtomicReference<ListState>(new ListState(_buckets, 0, 0));
+            // 代表 数组长度
             dataLength = _buckets.length();
+            // 内部真正的 bucket 数量
             numBuckets = size;
         }
 
+        /**
+         * 清空 bucketCircularArray 对象
+         */
         public void clear() {
             while (true) {
                 /*
@@ -741,8 +809,10 @@ public class HystrixRollingNumber {
                  * 
                  * The rare scenario in which that would occur, we'll accept the possible data loss while clearing it
                  * since the code has stated its desire to clear() anyways.
+                 * 返回当前对象
                  */
                 ListState current = state.get();
+                // 生成一个空的对象
                 ListState newState = current.clear();
                 if (state.compareAndSet(current, newState)) {
                     return;
@@ -757,9 +827,14 @@ public class HystrixRollingNumber {
             return Collections.unmodifiableList(Arrays.asList(getArray())).iterator();
         }
 
+        /**
+         * 将元素追加到 bucket 尾部
+         * @param o
+         */
         public void addLast(Bucket o) {
             ListState currentState = state.get();
             // create new version of state (what we want it to become)
+            // 返回一个新的 桶对象 每次 addBucket 要返回新对象就是为了 要使用CAS ???
             ListState newState = currentState.addBucket(o);
 
             /*
@@ -787,6 +862,10 @@ public class HystrixRollingNumber {
             return state.get().size;
         }
 
+        /**
+         * 获取最后一个元素
+         * @return
+         */
         public Bucket peekLast() {
             return state.get().tail();
         }

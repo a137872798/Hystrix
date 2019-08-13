@@ -51,16 +51,21 @@ public class HystrixCommandMetrics extends HystrixMetrics {
     private static final HystrixEventType[] ALL_EVENT_TYPES = HystrixEventType.values();
 
     /**
-     * 将事件添加到 bucket 中   Func2 代表传入 2个类型参数 返回第3个类型的结果
+     * 将事件添加到 bucket 中  bucket 对应 Metrics 的 RollingNumber 对象 调用时机是什么 什么时候传入
      */
     public static final Func2<long[], HystrixCommandCompletion, long[]> appendEventToBucket = new Func2<long[], HystrixCommandCompletion, long[]>() {
+
+        // 针对 完成的 Command 执行 fun
         @Override
         public long[] call(long[] initialCountArray, HystrixCommandCompletion execution) {
+            // 获取事件计数器
             ExecutionResult.EventCounts eventCounts = execution.getEventCounts();
             for (HystrixEventType eventType: ALL_EVENT_TYPES) {
                 switch (eventType) {
+                    // 一旦出现抛出异常的 跳过本次统计
                     case EXCEPTION_THROWN: break; //this is just a sum of other anyway - don't do the work here
                     default:
+                        // 就是将本次 command 的 eventCounts 读取出来的值 设置到 bucket中
                         initialCountArray[eventType.ordinal()] += eventCounts.getCount(eventType);
                         break;
                 }
@@ -69,17 +74,24 @@ public class HystrixCommandMetrics extends HystrixMetrics {
         }
     };
 
+    /**
+     * 桶 聚合???  注意这里入参是  2个 long[]
+     */
     public static final Func2<long[], long[], long[]> bucketAggregator = new Func2<long[], long[], long[]>() {
         @Override
         public long[] call(long[] cumulativeEvents, long[] bucketEventCounts) {
             for (HystrixEventType eventType: ALL_EVENT_TYPES) {
                 switch (eventType) {
+                    // 这里遇到异常时 也要处理
                     case EXCEPTION_THROWN:
+                        // 获取所有异常事件  将 第二个事件对象的数据累加到第一个事件对象上
+                        // 双层循环 ??? 每遇到一个 异常 把所有异常 又加了一次???
                         for (HystrixEventType exceptionEventType: HystrixEventType.EXCEPTION_PRODUCING_EVENT_TYPES) {
                             cumulativeEvents[eventType.ordinal()] += bucketEventCounts[exceptionEventType.ordinal()];
                         }
                         break;
                     default:
+                        // 累加对应的枚举值
                         cumulativeEvents[eventType.ordinal()] += bucketEventCounts[eventType.ordinal()];
                         break;
                 }
@@ -89,6 +101,7 @@ public class HystrixCommandMetrics extends HystrixMetrics {
     };
 
     // String is HystrixCommandKey.name() (we can't use HystrixCommandKey directly as we can't guarantee it implements hashcode/equals correctly)
+    // 又是缓存 ???
     private static final ConcurrentHashMap<String, HystrixCommandMetrics> metrics = new ConcurrentHashMap<String, HystrixCommandMetrics>();
 
     /**
@@ -103,6 +116,7 @@ public class HystrixCommandMetrics extends HystrixMetrics {
      * @param properties
      *            Pass-thru to {@link HystrixCommandMetrics} instance on first time when constructed
      * @return {@link HystrixCommandMetrics}
+     * 通过几个缓存键对象 去获取对应的统计对象
      */
     public static HystrixCommandMetrics getInstance(HystrixCommandKey key, HystrixCommandGroupKey commandGroup, HystrixCommandProperties properties) {
         return getInstance(key, commandGroup, null, properties);
@@ -120,9 +134,11 @@ public class HystrixCommandMetrics extends HystrixMetrics {
      * @param properties
      *            Pass-thru to {@link HystrixCommandMetrics} instance on first time when constructed
      * @return {@link HystrixCommandMetrics}
+     * 获取 统计对象
      */
     public static HystrixCommandMetrics getInstance(HystrixCommandKey key, HystrixCommandGroupKey commandGroup, HystrixThreadPoolKey threadPoolKey, HystrixCommandProperties properties) {
         // attempt to retrieve from cache first
+        // 首先尝试 根据 commandKey.name 从缓存中获取 metrics 对象
         HystrixCommandMetrics commandMetrics = metrics.get(key.name());
         if (commandMetrics != null) {
             return commandMetrics;
@@ -132,12 +148,15 @@ public class HystrixCommandMetrics extends HystrixMetrics {
                 if (existingMetrics != null) {
                     return existingMetrics;
                 } else {
+                    // 生成新对象并保存到缓存中
                     HystrixThreadPoolKey nonNullThreadPoolKey;
                     if (threadPoolKey == null) {
+                        // asKey 就是生成一个 HystrixThreadPoolKeyDefault 对象 且 内部的 name 属性就是这个name
                         nonNullThreadPoolKey = HystrixThreadPoolKey.Factory.asKey(commandGroup.name());
                     } else {
                         nonNullThreadPoolKey = threadPoolKey;
                     }
+                    // 通过传入的 属性来生成 metrics
                     HystrixCommandMetrics newCommandMetrics = new HystrixCommandMetrics(key, commandGroup, nonNullThreadPoolKey, properties, HystrixPlugins.getInstance().getEventNotifier());
                     metrics.putIfAbsent(key.name(), newCommandMetrics);
                     return newCommandMetrics;
@@ -152,6 +171,7 @@ public class HystrixCommandMetrics extends HystrixMetrics {
      * @param key
      *            {@link HystrixCommandKey} of {@link HystrixCommand} instance requesting the {@link HystrixCommandMetrics}
      * @return {@link HystrixCommandMetrics}
+     * 直接从缓存中获取 对象 因为没有传入 生成对象需要的必备参数 所有  就不尝试生成对象了
      */
     public static HystrixCommandMetrics getInstance(HystrixCommandKey key) {
         return metrics.get(key.name());
@@ -161,6 +181,7 @@ public class HystrixCommandMetrics extends HystrixMetrics {
      * All registered instances of {@link HystrixCommandMetrics}
      * 
      * @return {@code Collection<HystrixCommandMetrics>}
+     * 返回缓存的视图对象
      */
     public static Collection<HystrixCommandMetrics> getInstances() {
         return Collections.unmodifiableCollection(metrics.values());
@@ -168,6 +189,7 @@ public class HystrixCommandMetrics extends HystrixMetrics {
 
     /**
      * Clears all state from metrics. If new requests come in instances will be recreated and metrics started from scratch.
+     * 清除统计数据
      */
     /* package */ static void reset() {
         for (HystrixCommandMetrics metricsInstance: getInstances()) {
@@ -176,12 +198,30 @@ public class HystrixCommandMetrics extends HystrixMetrics {
         metrics.clear();
     }
 
+    /**
+     * command 的相关属性
+     */
     private final HystrixCommandProperties properties;
+    /**
+     * 该 command 的 唯一标识
+     */
     private final HystrixCommandKey key;
+    /**
+     * 该 command 所在group 的标识
+     */
     private final HystrixCommandGroupKey group;
+    /**
+     * 线程池键
+     */
     private final HystrixThreadPoolKey threadPoolKey;
+    /**
+     * 当前执行数量
+     */
     private final AtomicInteger concurrentExecutionCount = new AtomicInteger();
 
+    /**
+     * 健康计数流 ???
+     */
     private HealthCountsStream healthCountsStream;
     private final RollingCommandEventCounterStream rollingCommandEventCounterStream;
     private final CumulativeCommandEventCounterStream cumulativeCommandEventCounterStream;
