@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * @param <Event> type of raw data that needs to get summarized into a bucket
  * @param <Bucket> type of data contained in each bucket
  * @param <Output> type of data emitted to stream subscribers (often is the same as A but does not have to be)
- *                桶计数流 传入的事件对象 必须同时满足3个接口  该抽象类暴露了 bucket 以及为 bucket 提供数据流
+ *                桶计数流 泛型相关的 3个参数 event 代表 hystrixEvent 第二个参数 代表 long[] 代表 bucket 中的数据  output 应该是输出的目标
  */
 public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, Output> {
     /**
@@ -43,15 +43,32 @@ public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, 
      */
     protected final int numBuckets;
     /**
-     * 生成桶 的 流
+     * 可观察对象 对应Rxjava 中的观察者 在添加 订阅者时 会触发一系列的函数
      */
     protected final Observable<Bucket> bucketedStream;
+    /**
+     * 订阅者对象  可以 通过 Observable.subscripe(Subscription) 订阅数据
+     */
     protected final AtomicReference<Subscription> subscription = new AtomicReference<Subscription>(null);
 
+    /**
+     * 减少桶中的数据 ???
+     */
     private final Func1<Observable<Event>, Observable<Bucket>> reduceBucketToSummary;
 
+    /**
+     * Subject 是一个 即是 Observable 也是 Subscription 的接口
+     * 该类的特性是 会将 当前观察到的最新项 以及之后的 数据发送给 订阅端
+     */
     private final BehaviorSubject<Output> counterSubject = BehaviorSubject.create(getEmptyOutputValue());
 
+    /**
+     * 桶计数流
+     * @param inputEventStream  内部包含一个 observe() 方法 返回一个可观察对象
+     * @param numBuckets     限定的 buckets 数量
+     * @param bucketSizeInMs
+     * @param appendRawEventToBucket
+     */
     protected BucketedCounterStream(final HystrixEventStream<Event> inputEventStream, final int numBuckets, final int bucketSizeInMs,
                                     final Func2<Bucket, Event, Bucket> appendRawEventToBucket) {
         this.numBuckets = numBuckets;

@@ -220,9 +220,12 @@ public class HystrixCommandMetrics extends HystrixMetrics {
     private final AtomicInteger concurrentExecutionCount = new AtomicInteger();
 
     /**
-     * 健康计数流 ???
+     * 健康计数流 ???  内部是 关于 HealthCounts 的数据流
      */
     private HealthCountsStream healthCountsStream;
+    /**
+     * 事件计数器
+     */
     private final RollingCommandEventCounterStream rollingCommandEventCounterStream;
     private final CumulativeCommandEventCounterStream cumulativeCommandEventCounterStream;
     private final RollingCommandLatencyDistributionStream rollingCommandLatencyDistributionStream;
