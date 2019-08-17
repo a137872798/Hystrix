@@ -41,6 +41,9 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class RollingCommandEventCounterStream extends BucketedRollingCounterStream<HystrixCommandCompletion, long[], long[]> {
 
+    /**
+     * 缓存所有事件类型
+     */
     private static final ConcurrentMap<String, RollingCommandEventCounterStream> streams = new ConcurrentHashMap<String, RollingCommandEventCounterStream>();
 
     private static final int NUM_EVENT_TYPES = HystrixEventType.values().length;
@@ -53,6 +56,13 @@ public class RollingCommandEventCounterStream extends BucketedRollingCounterStre
         return getInstance(commandKey, numCounterBuckets, counterBucketSizeInMs);
     }
 
+    /**
+     * 生成实例对象
+     * @param commandKey
+     * @param numBuckets
+     * @param bucketSizeInMs
+     * @return
+     */
     public static RollingCommandEventCounterStream getInstance(HystrixCommandKey commandKey, int numBuckets, int bucketSizeInMs) {
         RollingCommandEventCounterStream initialStream = streams.get(commandKey.name());
         if (initialStream != null) {

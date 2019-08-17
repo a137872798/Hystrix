@@ -17,9 +17,14 @@ package com.netflix.hystrix.metric;
 
 import org.HdrHistogram.Histogram;
 
+/**
+ * 缓存数据 柱状图
+ */
 public class CachedValuesHistogram {
 
     private final static int NUMBER_SIGNIFICANT_DIGITS = 3;
+
+    // 比率值 ???
 
     private final int mean;
     private final int p0;
@@ -49,6 +54,7 @@ public class CachedValuesHistogram {
     private final int p99_99;
     private final int p100;
 
+    // 总的计数值
     private final long totalCount;
 
     public static CachedValuesHistogram backedBy(Histogram underlying) {

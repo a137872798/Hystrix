@@ -38,11 +38,15 @@ import java.util.concurrent.ConcurrentMap;
  *
  * These values get produced and cached in this class.
  * You may query to find the latest rolling count of 2 events (executed/rejected) via {@link #getLatestCount(com.netflix.hystrix.HystrixEventType.ThreadPool)}.
+ * 根据 线程池 相关事件来 初始化数据流
  */
 public class CumulativeThreadPoolEventCounterStream extends BucketedCumulativeCounterStream<HystrixCommandCompletion, long[], long[]> {
 
     private static final ConcurrentMap<String, CumulativeThreadPoolEventCounterStream> streams = new ConcurrentHashMap<String, CumulativeThreadPoolEventCounterStream>();
 
+    /**
+     * 只保存了 Execute  or  Reject 事件  (线程池相关的就这2种类型)
+     */
     private static final int ALL_EVENT_TYPES_SIZE = HystrixEventType.ThreadPool.values().length;
 
     public static CumulativeThreadPoolEventCounterStream getInstance(HystrixThreadPoolKey threadPoolKey, HystrixThreadPoolProperties properties) {
@@ -63,6 +67,7 @@ public class CumulativeThreadPoolEventCounterStream extends BucketedCumulativeCo
                 if (existingStream == null) {
                     CumulativeThreadPoolEventCounterStream newStream =
                             new CumulativeThreadPoolEventCounterStream(threadPoolKey, numBuckets, bucketSizeInMs,
+                                    // appendEventToBucket 又是 将数据 从event 中取出 并累加到 bucket 中
                                     HystrixThreadPoolMetrics.appendEventToBucket, HystrixThreadPoolMetrics.counterAggregator);
                     streams.putIfAbsent(threadPoolKey.name(), newStream);
                     return newStream;
@@ -83,6 +88,8 @@ public class CumulativeThreadPoolEventCounterStream extends BucketedCumulativeCo
                                                    Func2<long[], long[], long[]> reduceBucket) {
         super(HystrixThreadPoolCompletionStream.getInstance(threadPoolKey), numCounterBuckets, counterBucketSizeInMs, reduceCommandCompletion, reduceBucket);
     }
+
+    // 针对不同事件的累加器 getEmptyBucketSummary 和 getEmptyOutputValue 返回的数据是不同的
 
     @Override
     public long[] getEmptyBucketSummary() {

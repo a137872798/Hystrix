@@ -92,7 +92,7 @@ public class HystrixRequestContext implements Closeable {
      */
     public static HystrixRequestContext getContextForCurrentThread() {
         HystrixRequestContext context = requestVariables.get();
-        // 代表存在上下文对象  注意这里的 state 必须是 非空才被承认 context 被首次初始化时  state 就会被创建 当调用 shutdown() 时 state 会被置空
+        // 代表存在上下文对象  注意这里的 state 必须是 非空才被承认 context 被首次初始化时  state 就会被创建 (就是一个 容器对象)当调用 shutdown() 时 state 会被置空
         if (context != null && context.state != null) {
             // context.state can be null when context is not null
             // if a thread is being re-used and held a context previously, the context was shut down
@@ -147,6 +147,7 @@ public class HystrixRequestContext implements Closeable {
      * 终止本上下文对象
      */
     public void shutdown() {
+        // 因为 state 不为 null 应该是代表当前上下文对象有效
         if (state != null) {
             // 获取所有的requestVariable
             for (HystrixRequestVariableDefault<?> v : state.keySet()) {

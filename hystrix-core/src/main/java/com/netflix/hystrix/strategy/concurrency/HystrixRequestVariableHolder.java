@@ -31,19 +31,19 @@ import org.slf4j.LoggerFactory;
  * @param <T>
  * 
  * @ExcludeFromJavadoc
- * 请求变量包装器
+ * 请求变量包装器  具备缓存数据的能力
  */
 public class HystrixRequestVariableHolder<T> {
 
     static final Logger logger = LoggerFactory.getLogger(HystrixRequestVariableHolder.class);
 
     /**
-     * key 对象本身内部也维护了一个 RV 对象  HystrixRequestVariable 对象内部就一个get 方法
+     * 缓存键对象本身也是一个可缓存对象 (内部包含一个 HystrixRequestVariable)
      */
     private static ConcurrentHashMap<RVCacheKey, HystrixRequestVariable<?>> requestVariableInstance = new ConcurrentHashMap<RVCacheKey, HystrixRequestVariable<?>>();
 
     /**
-     * 生命周期对象
+     * 生命周期对象  就是将 缓存对象的 构建 和销毁抽象出来
      */
     private final HystrixRequestVariableLifecycle<T> lifeCycleMethods;
 
@@ -67,10 +67,12 @@ public class HystrixRequestVariableHolder<T> {
          * 2) If no implementation is found in cache then construct from factory.
          * 3) Cache implementation from factory as each object instance needs to be statically cached to be relevant across threads.
          */
-        // 从缓存中 获取 没有的话就 创建一个新的 并设置到缓存中
+        // 每个 hystrixRequestVariableHolder 对象 对应一个 缓存键 要同时和 并发策略一起才起作用 (2者都相等才算是同一对象)
         RVCacheKey key = new RVCacheKey(this, concurrencyStrategy);
+        // 尝试从静态缓存中获取
         HystrixRequestVariable<?> rvInstance = requestVariableInstance.get(key);
         if (rvInstance == null) {
+            // 通过并发策略对象 生成一个 RequestVariableHolder 对象 并保存到缓存中
             requestVariableInstance.putIfAbsent(key, concurrencyStrategy.getRequestVariable(lifeCycleMethods));
             /*
              * A safety check to help debug problems if someone starts injecting dynamically created HystrixConcurrencyStrategy instances - which should not be done and has no good reason to be done.
@@ -92,7 +94,7 @@ public class HystrixRequestVariableHolder<T> {
     private static class RVCacheKey {
 
         /**
-         * 缓存键本身就是由 RVH 对象来创建的
+         * 缓存键本身也是一个可缓存对象
          */
         private final HystrixRequestVariableHolder<?> rvHolder;
         private final HystrixConcurrencyStrategy concurrencyStrategy;

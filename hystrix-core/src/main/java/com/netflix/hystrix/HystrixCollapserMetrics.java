@@ -81,6 +81,9 @@ public class HystrixCollapserMetrics extends HystrixMetrics {
 
     private static final HystrixEventType.Collapser[] ALL_EVENT_TYPES = HystrixEventType.Collapser.values();
 
+    /**
+     * 针对碰撞的 累加函数 也就是在每个对象的 bucket 元素中将数据累加
+     */
     public static final Func2<long[], HystrixCollapserEvent, long[]> appendEventToBucket = new Func2<long[], HystrixCollapserEvent, long[]>() {
         @Override
         public long[] call(long[] initialCountArray, HystrixCollapserEvent collapserEvent) {
@@ -91,6 +94,9 @@ public class HystrixCollapserMetrics extends HystrixMetrics {
         }
     };
 
+    /**
+     * 桶累加器 就是将 param2 中的数据全部添加到 param1 中 并返回 param1
+     */
     public static final Func2<long[], long[], long[]> bucketAggregator = new Func2<long[], long[], long[]>() {
         @Override
         public long[] call(long[] cumulativeEvents, long[] bucketEventCounts) {

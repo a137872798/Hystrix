@@ -39,6 +39,7 @@ import java.util.concurrent.ConcurrentMap;
  * These values are stable - there's no peeking into a bucket until it is emitted
  *
  * These values get produced and cached in this class.  This value (the latest observed value) may be queried using {@link #getLatest(HystrixEventType)}.
+ * 命令事件的 统计   HystrixCommandCompletion  该对象中携带了 ExecutionResult 对象
  */
 public class CumulativeCommandEventCounterStream extends BucketedCumulativeCounterStream<HystrixCommandCompletion, long[], long[]> {
 
@@ -46,6 +47,9 @@ public class CumulativeCommandEventCounterStream extends BucketedCumulativeCount
 
     private static final int NUM_EVENT_TYPES = HystrixEventType.values().length;
 
+    /**
+     * 初始化的 逻辑基本都一致
+     */
     public static CumulativeCommandEventCounterStream getInstance(HystrixCommandKey commandKey, HystrixCommandProperties properties) {
         final int counterMetricWindow = properties.metricsRollingStatisticalWindowInMilliseconds().get();
         final int numCounterBuckets = properties.metricsRollingStatisticalWindowBuckets().get();
@@ -54,6 +58,13 @@ public class CumulativeCommandEventCounterStream extends BucketedCumulativeCount
         return getInstance(commandKey, numCounterBuckets, counterBucketSizeInMs);
     }
 
+    /**
+     * 初始化对象
+     * @param commandKey
+     * @param numBuckets
+     * @param bucketSizeInMs
+     * @return
+     */
     public static CumulativeCommandEventCounterStream getInstance(HystrixCommandKey commandKey, int numBuckets, int bucketSizeInMs) {
         CumulativeCommandEventCounterStream initialStream = streams.get(commandKey.name());
         if (initialStream != null) {
@@ -63,6 +74,8 @@ public class CumulativeCommandEventCounterStream extends BucketedCumulativeCount
                 CumulativeCommandEventCounterStream existingStream = streams.get(commandKey.name());
                 if (existingStream == null) {
                     CumulativeCommandEventCounterStream newStream = new CumulativeCommandEventCounterStream(commandKey, numBuckets, bucketSizeInMs,
+                            // appendEventToBucket  将执行结果中发生的事件的 计数值 累加到 bucket 中
+                            // bucketAggregator 代表2个入参都是 bucket 并累加数据
                             HystrixCommandMetrics.appendEventToBucket, HystrixCommandMetrics.bucketAggregator);
                     streams.putIfAbsent(commandKey.name(), newStream);
                     return newStream;

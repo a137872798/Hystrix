@@ -26,11 +26,21 @@ import com.netflix.hystrix.HystrixEventType;
  *     <li>BATCH_EXECUTED</li>
  *     <li>RESPONSE_FROM_CACHE</li>
  * </ul>
+ * hystrix 的 碰撞事件 包含的枚举类型  ADDED_TO_BATCH   BATCH_EXECUTED   RESPONSE_FROM_CACHE
  *
  */
 public class HystrixCollapserEvent implements HystrixEvent {
+    /**
+     * 碰撞 key 对象
+     */
     private final HystrixCollapserKey collapserKey;
+    /**
+     * 发生的碰撞类型
+     */
     private final HystrixEventType.Collapser eventType;
+    /**
+     * 该事件出现的次数???
+     */
     private final int count;
 
     protected HystrixCollapserEvent(HystrixCollapserKey collapserKey, HystrixEventType.Collapser eventType, int count) {

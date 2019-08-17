@@ -28,21 +28,42 @@ import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * 仪器板 数据流 ???
+ */
 public class HystrixDashboardStream {
+    /**
+     * 延迟的时间
+     */
     final int delayInMs;
+    /**
+     * 可观察的数据对象
+     */
     final Observable<DashboardData> singleSource;
+    /**
+     * 当前对象是否被订阅
+     */
     final AtomicBoolean isSourceCurrentlySubscribed = new AtomicBoolean(false);
 
+    /**
+     * 更新仪器版数据的时间间隔 也就是发射数据的时间间隔
+     */
     private static final DynamicIntProperty dataEmissionIntervalInMs =
             DynamicPropertyFactory.getInstance().getIntProperty("hystrix.stream.dashboard.intervalInMilliseconds", 500);
 
+    /**
+     * 通过一个 延迟时间来初始化  仪器版数据流对象
+     * @param delayInMs
+     */
     private HystrixDashboardStream(int delayInMs) {
         this.delayInMs = delayInMs;
+        // interval 代表每隔一段时间 发送一个对象  interval 只能返回 Long 类型
         this.singleSource = Observable.interval(delayInMs, TimeUnit.MILLISECONDS)
                 .map(new Func1<Long, DashboardData>() {
                     @Override
                     public DashboardData call(Long timestamp) {
                         return new DashboardData(
+                                // getInstance 返回的是统计数据的视图对象
                                 HystrixCommandMetrics.getInstances(),
                                 HystrixThreadPoolMetrics.getInstances(),
                                 HystrixCollapserMetrics.getInstances()
@@ -61,7 +82,9 @@ public class HystrixDashboardStream {
                         isSourceCurrentlySubscribed.set(false);
                     }
                 })
+                // 广播数据流
                 .share()
+                // 开启背压
                 .onBackpressureDrop();
     }
 
@@ -79,6 +102,7 @@ public class HystrixDashboardStream {
 
     /**
      * Return a ref-counted stream that will only do work when at least one subscriber is present
+     * 返回的可观察对象是 数据统计版
      */
     public Observable<DashboardData> observe() {
         return singleSource;
@@ -88,7 +112,13 @@ public class HystrixDashboardStream {
         return isSourceCurrentlySubscribed.get();
     }
 
+    /**
+     * 控制板上要显示的数据
+     */
     public static class DashboardData {
+
+        // 首先要搞清楚  在 hystrix 中存在3种 统计对象 一种是针对 command 的 一种是 针对 threadpool 一种是 collapser 每种需要统计的数据都有自己的 CounterStream 对象
+        // 并且控制板对象中 内置了这3种数据流
         final Collection<HystrixCommandMetrics> commandMetrics;
         final Collection<HystrixThreadPoolMetrics> threadPoolMetrics;
         final Collection<HystrixCollapserMetrics> collapserMetrics;
