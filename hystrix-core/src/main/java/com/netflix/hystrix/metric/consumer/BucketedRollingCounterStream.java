@@ -33,19 +33,37 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *                bucket 滚动计数流 ???
  */
 public abstract class BucketedRollingCounterStream<Event extends HystrixEvent, Bucket, Output> extends BucketedCounterStream<Event, Bucket, Output> {
+    /**
+     * 使用 Observable 来包装 输出数据的加工逻辑
+     */
     private Observable<Output> sourceStream;
+    /**
+     * Observable当前是否被订阅
+     */
     private final AtomicBoolean isSourceCurrentlySubscribed = new AtomicBoolean(false);
 
+    /**
+     * 初始化该对象
+     * @param stream 事件流对象
+     * @param numBuckets 桶数量
+     * @param bucketSizeInMs 每个桶的毫秒数
+     * @param appendRawEventToBucket 将event 追加到 bucket 中
+     * @param reduceBucket 将bucket 中的数据聚合的函数
+     */
     protected BucketedRollingCounterStream(HystrixEventStream<Event> stream, final int numBuckets, int bucketSizeInMs,
                                            final Func2<Bucket, Event, Bucket> appendRawEventToBucket,
                                            final Func2<Output, Bucket, Output> reduceBucket) {
+        // 设置父对象属性
         super(stream, numBuckets, bucketSizeInMs, appendRawEventToBucket);
         Func1<Observable<Bucket>, Observable<Output>> reduceWindowToSummary = new Func1<Observable<Bucket>, Observable<Output>>() {
             @Override
             public Observable<Output> call(Observable<Bucket> window) {
+                // scan 再调用时 每次操作会输出一次 之后 再下一次操作中把本次结果当作参数 而 reduce 是只输出一次
+                // 就是 一般情况 .scan(...).subscribe(...) 先触发 subscribe 的 call 之后再触发 scan
                 return window.scan(getEmptyOutputValue(), reduceBucket).skip(numBuckets);
             }
         };
+        // bucketedStream 是 父类的数据流
         this.sourceStream = bucketedStream      //stream broken up into buckets
                 .window(numBuckets, 1)          //emit overlapping windows of buckets
                 .flatMap(reduceWindowToSummary) //convert a window of bucket-summaries into a single summary

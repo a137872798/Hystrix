@@ -57,14 +57,14 @@ public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, 
     private final Func1<Observable<Event>, Observable<Bucket>> reduceBucketToSummary;
 
     /**
-     * Subject 是一个 即是 Observable 也是 Subscription 的接口
+     * Subject 是一个 既继承 Observable 也继承 Subscription 的接口
      * 该类的特性是 会将 当前观察到的最新项 以及之后的 数据发送给 订阅端
      */
     private final BehaviorSubject<Output> counterSubject = BehaviorSubject.create(getEmptyOutputValue());
 
     /**
      * 桶计数流
-     * @param inputEventStream  内部包含一个 observe() 方法 返回一个可观察对象
+     * @param inputEventStream  HystrixEventStream 包含一个 observe() 方法 返回一个可观察对象
      * @param numBuckets     限定的 buckets 数量
      * @param bucketSizeInMs
      * @param appendRawEventToBucket
@@ -72,18 +72,26 @@ public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, 
     protected BucketedCounterStream(final HystrixEventStream<Event> inputEventStream, final int numBuckets, final int bucketSizeInMs,
                                     final Func2<Bucket, Event, Bucket> appendRawEventToBucket) {
         this.numBuckets = numBuckets;
+        // 初始化 减少桶的对象
         this.reduceBucketToSummary = new Func1<Observable<Event>, Observable<Bucket>>() {
             @Override
             public Observable<Bucket> call(Observable<Event> eventBucket) {
+                // 这里将 第二个 Func2 作为参数  reduce 代表将 param1 与 param2 相结合 (不一定是加)
                 return eventBucket.reduce(getEmptyBucketSummary(), appendRawEventToBucket);
             }
         };
 
+        /**
+         * 空事件计数对象
+         */
         final List<Bucket> emptyEventCountsToStart = new ArrayList<Bucket>();
         for (int i = 0; i < numBuckets; i++) {
             emptyEventCountsToStart.add(getEmptyBucketSummary());
         }
 
+        /**
+         * 只有 订阅关系建立了 才会 发射数据
+         */
         this.bucketedStream = Observable.defer(new Func0<Observable<Bucket>>() {
             @Override
             public Observable<Bucket> call() {
@@ -96,24 +104,38 @@ public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, 
         });
     }
 
+    /**
+     * 获得 空bucket 的描述信息
+     * @return
+     */
     abstract Bucket getEmptyBucketSummary();
 
+    /**
+     * 获取空的 输出值 由子类实现
+     * @return
+     */
     abstract Output getEmptyOutputValue();
 
     /**
      * Return the stream of buckets
      * @return stream of buckets
+     * 返回可观察对象
      */
     public abstract Observable<Output> observe();
 
+    /**
+     * 未开始前 缓存数据
+     */
     public void startCachingStreamValuesIfUnstarted() {
         if (subscription.get() == null) {
             //the stream is not yet started
+            // 当前还没有订阅者  将countersubject 设置上去 返回的结果 已经 处理过发射的事件了
             Subscription candidateSubscription = observe().subscribe(counterSubject);
             if (subscription.compareAndSet(null, candidateSubscription)) {
                 //won the race to set the subscription
             } else {
                 //lost the race to set the subscription, so we need to cancel this one
+                // 设置失败 接触订阅 ???
                 candidateSubscription.unsubscribe();
             }
         }
@@ -122,16 +144,23 @@ public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, 
     /**
      * Synchronous call to retrieve the last calculated bucket without waiting for any emissions
      * @return last calculated bucket
+     * 获得最后一个输出对象
      */
     public Output getLatest() {
+        // 如果还没有订阅者  就进行设置
         startCachingStreamValuesIfUnstarted();
         if (counterSubject.hasValue()) {
+            // 如果生成了值 就返回
             return counterSubject.getValue();
         } else {
+            // 返回空的输出结果
             return getEmptyOutputValue();
         }
     }
 
+    /**
+     * 接触订阅 关闭对象
+     */
     public void unsubscribe() {
         Subscription s = subscription.get();
         if (s != null) {
