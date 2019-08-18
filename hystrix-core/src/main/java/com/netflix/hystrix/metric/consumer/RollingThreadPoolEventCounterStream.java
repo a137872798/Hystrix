@@ -38,11 +38,15 @@ import java.util.concurrent.ConcurrentMap;
  *
  * These values get produced and cached in this class.
  * You may query to find the latest rolling count of 2 events (executed/rejected) via {@link #getLatestCount(com.netflix.hystrix.HystrixEventType.ThreadPool)}.
+ * 用于统计 命令完成时 线程池相关事件的对象
  */
 public class RollingThreadPoolEventCounterStream extends BucketedRollingCounterStream<HystrixCommandCompletion, long[], long[]> {
 
     private static final ConcurrentMap<String, RollingThreadPoolEventCounterStream> streams = new ConcurrentHashMap<String, RollingThreadPoolEventCounterStream>();
 
+    /**
+     * 维护线程池相关事件的对象
+     */
     private static final int ALL_EVENT_TYPES_SIZE = HystrixEventType.ThreadPool.values().length;
 
     public static RollingThreadPoolEventCounterStream getInstance(HystrixThreadPoolKey threadPoolKey, HystrixThreadPoolProperties properties) {
@@ -63,6 +67,7 @@ public class RollingThreadPoolEventCounterStream extends BucketedRollingCounterS
                 if (existingStream == null) {
                     RollingThreadPoolEventCounterStream newStream =
                             new RollingThreadPoolEventCounterStream(threadPoolKey, numBuckets, bucketSizeInMs,
+                                    // 下面2个函数 一个是 从 event 中将数据 填充到 bucket 中 一个是将2个 bucket的数据累加
                                     HystrixThreadPoolMetrics.appendEventToBucket, HystrixThreadPoolMetrics.counterAggregator);
                     streams.putIfAbsent(threadPoolKey.name(), newStream);
                     return newStream;

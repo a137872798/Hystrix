@@ -22,6 +22,7 @@ package com.netflix.hystrix.strategy.concurrency;
  * This implementation also returns null when {@link #get()} is called while the {@link HystrixRequestContext} has not
  * been initialized rather than throwing an exception, allowing for use in a {@link HystrixConcurrencyStrategy} which
  * does not depend on an a HystrixRequestContext
+ * 该对象 作为 HystrixRequestVariableHolder 对象 的 value
  */
 public class HystrixLifecycleForwardingRequestVariable<T> extends HystrixRequestVariableDefault<T> {
 

@@ -41,10 +41,19 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class HealthCountsStream extends BucketedRollingCounterStream<HystrixCommandCompletion, long[], HystrixCommandMetrics.HealthCounts> {
 
+    /**
+     * 缓存容器
+     */
     private static final ConcurrentMap<String, HealthCountsStream> streams = new ConcurrentHashMap<String, HealthCountsStream>();
 
+    /**
+     * hystrix 所有事件枚举
+     */
     private static final int NUM_EVENT_TYPES = HystrixEventType.values().length;
 
+    /**
+     * 健康检查累加器  该函数的作用是 每次 将 bucket 中的数据 填充到传入的 healthCounts中
+     */
     private static final Func2<HystrixCommandMetrics.HealthCounts, long[], HystrixCommandMetrics.HealthCounts> healthCheckAccumulator = new Func2<HystrixCommandMetrics.HealthCounts, long[], HystrixCommandMetrics.HealthCounts>() {
         @Override
         public HystrixCommandMetrics.HealthCounts call(HystrixCommandMetrics.HealthCounts healthCounts, long[] bucketEventCounts) {
@@ -53,26 +62,45 @@ public class HealthCountsStream extends BucketedRollingCounterStream<HystrixComm
     };
 
 
+    /**
+     * 尝试从缓存中获取对象信息
+     * @param commandKey
+     * @param properties
+     * @return
+     */
     public static HealthCountsStream getInstance(HystrixCommandKey commandKey, HystrixCommandProperties properties) {
+        // 获取生成健康信息的 快照时间间隔
         final int healthCountBucketSizeInMs = properties.metricsHealthSnapshotIntervalInMilliseconds().get();
         if (healthCountBucketSizeInMs == 0) {
             throw new RuntimeException("You have set the bucket size to 0ms.  Please set a positive number, so that the metric stream can be properly consumed");
         }
+        // 统计数据的 窗口大小 (这里 将 millisecond 看作是 容量) / 每个桶的容量 (时间)  得到的就是桶数
         final int numHealthCountBuckets = properties.metricsRollingStatisticalWindowInMilliseconds().get() / healthCountBucketSizeInMs;
 
         return getInstance(commandKey, numHealthCountBuckets, healthCountBucketSizeInMs);
     }
 
+    /**
+     * 根据 commandKey  桶数  每个桶的 容量 生成 健康数据统计流
+     * @param commandKey
+     * @param numBuckets
+     * @param bucketSizeInMs
+     * @return
+     */
     public static HealthCountsStream getInstance(HystrixCommandKey commandKey, int numBuckets, int bucketSizeInMs) {
+        // 先从缓存中获取
         HealthCountsStream initialStream = streams.get(commandKey.name());
         if (initialStream != null) {
+            // 从缓存返回
             return initialStream;
         } else {
             final HealthCountsStream healthStream;
             synchronized (HealthCountsStream.class) {
                 HealthCountsStream existingStream = streams.get(commandKey.name());
                 if (existingStream == null) {
+                    // 创建一个 新的数据流
                     HealthCountsStream newStream = new HealthCountsStream(commandKey, numBuckets, bucketSizeInMs,
+                            // 该对象就是将入参 的 统计值 转移到 bucket中
                             HystrixCommandMetrics.appendEventToBucket);
 
                     streams.putIfAbsent(commandKey.name(), newStream);
@@ -81,29 +109,53 @@ public class HealthCountsStream extends BucketedRollingCounterStream<HystrixComm
                     healthStream = existingStream;
                 }
             }
+            // 启动
             healthStream.startCachingStreamValuesIfUnstarted();
             return healthStream;
         }
     }
 
+    /**
+     * 清空缓存
+     */
     public static void reset() {
         streams.clear();
     }
 
+    /**
+     * 从缓存中移除某个数据
+     * @param key
+     */
     public static void removeByKey(HystrixCommandKey key) {
         streams.remove(key.name());
     }
 
+    /**
+     * 初始化一个 healthCountsStream 对象
+     * @param commandKey   commandKey 用于保证唯一性
+     * @param numBuckets   一共有多少桶
+     * @param bucketSizeInMs   每个桶的容量
+     * @param reduceCommandCompletion  代表叠加的函数  针对 例如  HystrixCommandCompletion 数据追加到桶中
+     */
     private HealthCountsStream(final HystrixCommandKey commandKey, final int numBuckets, final int bucketSizeInMs,
                                Func2<long[], HystrixCommandCompletion, long[]> reduceCommandCompletion) {
+        // healthCheckAccumulator 代表将 桶中的数据 追到到 数据流中
         super(HystrixCommandCompletionStream.getInstance(commandKey), numBuckets, bucketSizeInMs, reduceCommandCompletion, healthCheckAccumulator);
     }
 
+    /**
+     * 返回一个 空桶
+     * @return
+     */
     @Override
     long[] getEmptyBucketSummary() {
         return new long[NUM_EVENT_TYPES];
     }
 
+    /**
+     * 返回空值
+     * @return
+     */
     @Override
     HystrixCommandMetrics.HealthCounts getEmptyOutputValue() {
         return HystrixCommandMetrics.HealthCounts.empty();

@@ -53,7 +53,7 @@ import org.slf4j.LoggerFactory;
  * 
  * @ExcludeFromJavadoc
  * @ThreadSafe
- * 默认的请求变量  该类对于用户来说 就是一个 模子 需要子类去修改核心方法
+ * 默认的请求变量  该类对于用户来说 就是一个 模子 需要子类去修改核心方法 这里 拓展了 RequestContext 的概念 针对每条线程 绑定一个 请求上下文对象
  */
 public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<T> {
     static final Logger logger = LoggerFactory.getLogger(HystrixRequestVariableDefault.class);
@@ -160,6 +160,12 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
         }
     }
 
+    /**
+     * 将请求上下文对象维护的 requestVariable 从 context 中移除
+     * @param context
+     * @param v
+     * @param <T>
+     */
     @SuppressWarnings("unchecked")
     /* package */static <T> void remove(HystrixRequestContext context, HystrixRequestVariableDefault<T> v) {
         // remove first so no other threads get it
@@ -229,6 +235,11 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
             this.rv = rv;
         }
 
+        /**
+         * 如果 初始化时 就传入了 value 就代表初始化完成
+         * @param rv
+         * @param value
+         */
         private LazyInitializer(HystrixRequestVariableDefault<T> rv, T value) {
             this.rv = rv;
             this.value = value;

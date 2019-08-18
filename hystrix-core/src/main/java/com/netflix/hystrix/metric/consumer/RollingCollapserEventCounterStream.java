@@ -37,11 +37,15 @@ import java.util.concurrent.ConcurrentMap;
  * These values are stable - there's no peeking into a bucket until it is emitted
  *
  * These values get produced and cached in this class.  This value (the latest observed value) may be queried using {@link #getLatest(HystrixEventType.Collapser)}.
+ * 滚动碰撞事件
  */
 public class RollingCollapserEventCounterStream extends BucketedRollingCounterStream<HystrixCollapserEvent, long[], long[]> {
 
     private static final ConcurrentMap<String, RollingCollapserEventCounterStream> streams = new ConcurrentHashMap<String, RollingCollapserEventCounterStream>();
 
+    /**
+     * 所有碰撞事件
+     */
     private static final int NUM_EVENT_TYPES = HystrixEventType.Collapser.values().length;
 
     public static RollingCollapserEventCounterStream getInstance(HystrixCollapserKey collapserKey, HystrixCollapserProperties properties) {
@@ -60,7 +64,9 @@ public class RollingCollapserEventCounterStream extends BucketedRollingCounterSt
             synchronized (RollingCollapserEventCounterStream.class) {
                 RollingCollapserEventCounterStream existingStream = streams.get(collapserKey.name());
                 if (existingStream == null) {
-                    RollingCollapserEventCounterStream newStream = new RollingCollapserEventCounterStream(collapserKey, numBuckets, bucketSizeInMs, HystrixCollapserMetrics.appendEventToBucket, HystrixCollapserMetrics.bucketAggregator);
+                    // appendEventToBucket 传入了 有关 从 event 中统计数据 并转移到bucket 的能力   bucketAggregator 用于累加2个bucket 中数据
+                    RollingCollapserEventCounterStream newStream = new RollingCollapserEventCounterStream(collapserKey, numBuckets, bucketSizeInMs
+                            , HystrixCollapserMetrics.appendEventToBucket, HystrixCollapserMetrics.bucketAggregator);
                     streams.putIfAbsent(collapserKey.name(), newStream);
                     return newStream;
                 } else {

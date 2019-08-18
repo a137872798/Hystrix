@@ -134,6 +134,9 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
         return threadPoolMetrics.getCurrentCompletedTaskCount().intValue() > 0;
     }
 
+    /**
+     * 将线程池相关的事件 数据累加到 bucket 数组中
+     */
     public static final Func2<long[], HystrixCommandCompletion, long[]> appendEventToBucket
             = new Func2<long[], HystrixCommandCompletion, long[]>() {
         @Override
@@ -141,6 +144,7 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
             ExecutionResult.EventCounts eventCounts = execution.getEventCounts();
             for (HystrixEventType eventType: ALL_COMMAND_EVENT_TYPES) {
                 long eventCount = eventCounts.getCount(eventType);
+                // 因为 commandCompletion 中包含了所有事件类型的结果 这里只需要过滤出 线程池相关的事件
                 HystrixEventType.ThreadPool threadPoolEventType = HystrixEventType.ThreadPool.from(eventType);
                 if (threadPoolEventType != null) {
                     initialCountArray[threadPoolEventType.ordinal()] += eventCount;
@@ -150,6 +154,9 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
         }
     };
 
+    /**
+     * 针对 ThreadPool 的 事件累加器
+     */
     public static final Func2<long[], long[], long[]> counterAggregator = new Func2<long[], long[], long[]>() {
         @Override
         public long[] call(long[] cumulativeEvents, long[] bucketEventCounts) {

@@ -145,7 +145,7 @@ import java.util.concurrent.atomic.AtomicReference;
     }
 
     /**
-     * 命令统计对象
+     * 命令统计对象  内部维护了一个计数器对象  用于统计一系列数据 就是通过 rxJava 的 响应式编程
      */
     protected final HystrixCommandMetrics metrics;
 
@@ -1278,6 +1278,7 @@ import java.util.concurrent.atomic.AtomicReference;
             //capture the HystrixRequestContext upfront so that we can use it in the timeout thread later
             final HystrixRequestContext hystrixRequestContext = HystrixRequestContext.getContextForCurrentThread();
 
+            // 监听器对象
             TimerListener listener = new TimerListener() {
 
                 @Override
@@ -1747,15 +1748,26 @@ import java.util.concurrent.atomic.AtomicReference;
      * <p>
      * Using AtomicInteger increment/decrement instead of java.util.concurrent.Semaphore since we don't need blocking and need a custom implementation to get the dynamic permit count and since
      * AtomicInteger achieves the same behavior and performance without the more complex implementation of the actual Semaphore class using AbstractQueueSynchronizer.
+     * 可重试的 信号量对象   只是一个模拟的  Semaphore  而不是拓展juc 的信号量
      */
     /* package */static class TryableSemaphoreActual implements TryableSemaphore {
+        /**
+         * 门票数量
+         */
         protected final HystrixProperty<Integer> numberOfPermits;
+        /**
+         * 计数
+         */
         private final AtomicInteger count = new AtomicInteger(0);
 
         public TryableSemaphoreActual(HystrixProperty<Integer> numberOfPermits) {
             this.numberOfPermits = numberOfPermits;
         }
 
+        /**
+         * count 值等同于当前的门票数量
+         * @return
+         */
         @Override
         public boolean tryAcquire() {
             int currentCount = count.incrementAndGet();
@@ -1779,10 +1791,17 @@ import java.util.concurrent.atomic.AtomicReference;
 
     }
 
+    /**
+     * 一个空的 重试信号量对象
+     */
     /* package */static class TryableSemaphoreNoOp implements TryableSemaphore {
 
         public static final TryableSemaphore DEFAULT = new TryableSemaphoreNoOp();
 
+        /**
+         * 默认总是能
+         * @return
+         */
         @Override
         public boolean tryAcquire() {
             return true;
@@ -1793,6 +1812,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
         }
 
+        /**
+         * 默认返回使用的 门票为0
+         * @return
+         */
         @Override
         public int getNumberOfPermitsUsed() {
             return 0;

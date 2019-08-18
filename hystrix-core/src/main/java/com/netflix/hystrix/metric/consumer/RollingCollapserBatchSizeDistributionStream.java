@@ -37,6 +37,7 @@ import java.util.concurrent.ConcurrentMap;
  * These values are stable - there's no peeking into a bucket until it is emitted
  *
  * These values get produced and cached in this class, as soon as this stream is queried for the first time.
+ * 批量数据 分发冲突数据流 ???
  */
 public class RollingCollapserBatchSizeDistributionStream extends RollingDistributionStream<HystrixCollapserEvent> {
     private static final ConcurrentMap<String, RollingCollapserBatchSizeDistributionStream> streams = new ConcurrentHashMap<String, RollingCollapserBatchSizeDistributionStream>();

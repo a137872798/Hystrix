@@ -43,10 +43,20 @@ import java.util.concurrent.atomic.AtomicReference;
  * These values are stable - there's no peeking into a bucket until it is emitted
  *
  * These values get produced and cached in this class.
+ * 分发数据事件流
  */
 public class RollingDistributionStream<Event extends HystrixEvent> {
+    /**
+     * 这里维护了 订阅者对象
+     */
     private AtomicReference<Subscription> rollingDistributionSubscription = new AtomicReference<Subscription>(null);
+    /**
+     * 柱形图对象 先不管
+     */
     private final BehaviorSubject<CachedValuesHistogram> rollingDistribution = BehaviorSubject.create(CachedValuesHistogram.backedBy(CachedValuesHistogram.getNewHistogram()));
+    /**
+     * 柱形图数据流
+     */
     private final Observable<CachedValuesHistogram> rollingDistributionStream;
 
     private static final Func2<Histogram, Histogram, Histogram> distributionAggregator = new Func2<Histogram, Histogram, Histogram>() {

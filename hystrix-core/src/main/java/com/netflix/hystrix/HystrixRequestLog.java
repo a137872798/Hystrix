@@ -35,6 +35,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * Log of {@link HystrixCommand} executions and events during the current request.
+ * hystrix 请求日志对象
  */
 public class HystrixRequestLog {
     private static final Logger logger = LoggerFactory.getLogger(HystrixRequestLog.class);
@@ -47,28 +48,43 @@ public class HystrixRequestLog {
      * 
      * Intended to help prevent memory leaks when someone isn't aware of the
      * HystrixRequestContext lifecycle or enabling/disabling RequestLog.
+     * 最大存储容量 允许暂存的 日志数量
      */
     /* package */static final int MAX_STORAGE = 1000;
 
+    /**
+     * 一个缓存对象 当不存在数据时 会调用 init 方法 初始化 对象  该对象用于初始化 RequestVariable
+     */
     private static final HystrixRequestVariableHolder<HystrixRequestLog> currentRequestLog = new HystrixRequestVariableHolder<HystrixRequestLog>(new HystrixRequestVariableLifecycle<HystrixRequestLog>() {
         @Override
         public HystrixRequestLog initialValue() {
+            // 初始化一个 HystrixRequestLog
             return new HystrixRequestLog();
         }
 
+        /**
+         * 当销毁对象时 调用的方法
+         * @param value
+         *            of request variable to allow cleanup activity.
+         *            <p>
+         *            If nothing needs to be cleaned up then nothing needs to be done in this method.
+         */
         public void shutdown(HystrixRequestLog value) {
             //write this value to the Request stream
+            // 将所有执行的 事件写入到 事件流中
             HystrixRequestEventsStream.getInstance().write(value.getAllExecutedCommands());
         }
     });
 
     /**
      * History of {@link HystrixCommand} executed in this request.
+     * 记录了 本次请求 执行的 command
      */
     private LinkedBlockingQueue<HystrixCommand<?>> executedCommands = new LinkedBlockingQueue<HystrixCommand<?>>(MAX_STORAGE);
 
     /**
      * History of {@link HystrixInvokableInfo} executed in this request.
+     * 记录本次调用信息
      */
     private LinkedBlockingQueue<HystrixInvokableInfo<?>> allExecutedCommands = new LinkedBlockingQueue<HystrixInvokableInfo<?>>(MAX_STORAGE);
 
@@ -80,6 +96,7 @@ public class HystrixRequestLog {
      * {@link HystrixRequestLog} for current request as defined by {@link HystrixRequestContext}.
      * 
      * @return {@link HystrixRequestLog}
+     * 通过传入 并发策略 生成 日志对象
      */
     public static HystrixRequestLog getCurrentRequest(HystrixConcurrencyStrategy concurrencyStrategy) {
         return currentRequestLog.get(concurrencyStrategy);
@@ -92,8 +109,11 @@ public class HystrixRequestLog {
      * {@link #getCurrentRequest(HystrixConcurrencyStrategy)}.
      * 
      * @return {@link HystrixRequestLog}
+     * 通过默认的并发策略对象来生成 日志对象
      */
     public static HystrixRequestLog getCurrentRequest() {
+        // hystrix 代表 从 系统变量 -> SPI 等 依次加载 属性并根据属性来生成对应的 配置类 比如 并发策略对象
+        // 最后就是调用  currentRequestLog.init
         return currentRequestLog.get(HystrixPlugins.getInstance().getConcurrencyStrategy());
     }
 
@@ -111,6 +131,7 @@ public class HystrixRequestLog {
      * Retrieve {@link HystrixCommand} instances that were executed during this {@link HystrixRequestContext}.
      * 
      * @return {@code Collection<HystrixCommand<?>>}
+     * 获取所有执行过的命令信息
      */
     public Collection<HystrixInvokableInfo<?>> getAllExecutedCommands() {
         return Collections.unmodifiableCollection(allExecutedCommands);
@@ -121,14 +142,17 @@ public class HystrixRequestLog {
      * 
      * @param command
      *            {@code HystrixCommand<?>}
+     *            增加执行过的命令
      */
     /* package */void addExecutedCommand(HystrixInvokableInfo<?> command) {
+        // 添加失败 代表超过容量了  这里只是打印日志
         if (!allExecutedCommands.offer(command)) {
             // see RequestLog: Reduce Chance of Memory Leak https://github.com/Netflix/Hystrix/issues/53
             logger.warn("RequestLog ignoring command after reaching limit of " + MAX_STORAGE + ". See https://github.com/Netflix/Hystrix/issues/53 for more information.");
         }
 
         // TODO remove this when deprecation completed
+        // 如果 command 是  HystrixCommand 的话 就 尝试设置到 executedCommand 对象中
         if (command instanceof HystrixCommand) {
             @SuppressWarnings("rawtypes")
             HystrixCommand<?> _c = (HystrixCommand) command;
@@ -169,6 +193,7 @@ public class HystrixRequestLog {
      * This command also has an Observable fallback, and it emits 6 <code>OnNext</code>s, then an <code>OnCompleted</code>.
      *
      * @return String request log or "Unknown" if unable to instead of throwing an exception.
+     * 获取 本次执行过的执行对象  核心就是将 执行的 command 生成字符串后返回
      */
     public String getExecutedCommandsAsString() {
         try {
@@ -177,10 +202,12 @@ public class HystrixRequestLog {
 
             StringBuilder builder = new StringBuilder();
             int estimatedLength = 0;
+            // 遍历所有执行的指令
             for (HystrixInvokableInfo<?> command : allExecutedCommands) {
                 builder.setLength(0);
                 builder.append(command.getCommandKey().name());
 
+                // 每个命令执行的 事件类型
                 List<HystrixEventType> events = new ArrayList<HystrixEventType>(command.getExecutionEvents());
                 if (events.size() > 0) {
                     Collections.sort(events);

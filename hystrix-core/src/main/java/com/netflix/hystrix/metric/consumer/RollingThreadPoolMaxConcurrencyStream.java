@@ -33,6 +33,7 @@ import java.util.concurrent.ConcurrentMap;
  * This value gets cached in this class.  It may be queried using {@link #getLatestRollingMax()}
  *
  * This is a stable value - there's no peeking into a bucket until it is emitted
+ * 线程池并发数对象
  */
 public class RollingThreadPoolMaxConcurrencyStream extends RollingConcurrencyStream {
 

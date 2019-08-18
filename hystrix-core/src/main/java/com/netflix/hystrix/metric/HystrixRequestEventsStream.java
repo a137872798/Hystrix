@@ -24,13 +24,21 @@ import java.util.Collection;
 
 /**
  * Stream of requests, each of which contains a series of command executions
+ * 请求事件的流对象
  */
 public class HystrixRequestEventsStream {
+    /**
+     * 内部维护的 subject (observable, subscribe)
+     */
     private final Subject<HystrixRequestEvents, HystrixRequestEvents> writeOnlyRequestEventsSubject;
+    /**
+     * 只读对象  对应到 observable 代表只能被 观察
+     */
     private final Observable<HystrixRequestEvents> readOnlyRequestEvents;
 
     /* package */ HystrixRequestEventsStream() {
         writeOnlyRequestEventsSubject = PublishSubject.create();
+        //
         readOnlyRequestEvents = writeOnlyRequestEventsSubject.onBackpressureBuffer(1024);
     }
 

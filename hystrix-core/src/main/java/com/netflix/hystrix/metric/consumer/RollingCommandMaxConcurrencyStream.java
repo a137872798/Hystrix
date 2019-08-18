@@ -32,10 +32,13 @@ import java.util.concurrent.ConcurrentMap;
  *
  * This value gets cached in this class.  It may be queried using {@link #getLatestRollingMax()}
  * This value is stable - there's no peeking into a bucket until it is emitted
- *
+ * 统计并发次数
  */
 public class RollingCommandMaxConcurrencyStream extends RollingConcurrencyStream {
 
+    /**
+     * 缓存对象
+     */
     private static final ConcurrentMap<String, RollingCommandMaxConcurrencyStream> streams = new ConcurrentHashMap<String, RollingCommandMaxConcurrencyStream>();
 
     public static RollingCommandMaxConcurrencyStream getInstance(HystrixCommandKey commandKey, HystrixCommandProperties properties) {
@@ -68,6 +71,12 @@ public class RollingCommandMaxConcurrencyStream extends RollingConcurrencyStream
         streams.clear();
     }
 
+    /**
+     * 初始化该对象时 不需要传入 函数对象
+     * @param commandKey
+     * @param numBuckets
+     * @param bucketSizeInMs
+     */
     private RollingCommandMaxConcurrencyStream(final HystrixCommandKey commandKey, final int numBuckets, final int bucketSizeInMs) {
         super(HystrixCommandStartStream.getInstance(commandKey), numBuckets, bucketSizeInMs);
     }

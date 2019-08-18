@@ -173,7 +173,7 @@ public enum HystrixEventType {
     }
 
     /**
-     * 线程池美剧
+     * 线程池枚举
      */
     public enum ThreadPool {
         // 被执行还是被拒绝

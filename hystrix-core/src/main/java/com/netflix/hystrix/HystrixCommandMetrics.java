@@ -101,7 +101,7 @@ public class HystrixCommandMetrics extends HystrixMetrics {
     };
 
     // String is HystrixCommandKey.name() (we can't use HystrixCommandKey directly as we can't guarantee it implements hashcode/equals correctly)
-    // 又是缓存 ???
+    // 缓存了每个命令相关的 统计对象
     private static final ConcurrentHashMap<String, HystrixCommandMetrics> metrics = new ConcurrentHashMap<String, HystrixCommandMetrics>();
 
     /**
@@ -227,11 +227,25 @@ public class HystrixCommandMetrics extends HystrixMetrics {
      * 事件计数器
      */
     private final RollingCommandEventCounterStream rollingCommandEventCounterStream;
+    /**
+     * 命令事件计数流 (累加)
+     */
     private final CumulativeCommandEventCounterStream cumulativeCommandEventCounterStream;
     private final RollingCommandLatencyDistributionStream rollingCommandLatencyDistributionStream;
     private final RollingCommandUserLatencyDistributionStream rollingCommandUserLatencyDistributionStream;
+    /**
+     * 最大并发数流
+     */
     private final RollingCommandMaxConcurrencyStream rollingCommandMaxConcurrencyStream;
 
+    /**
+     * 初始化 统计数据的对象
+     * @param key
+     * @param commandGroup
+     * @param threadPoolKey
+     * @param properties
+     * @param eventNotifier
+     */
     /* package */HystrixCommandMetrics(final HystrixCommandKey key, HystrixCommandGroupKey commandGroup, HystrixThreadPoolKey threadPoolKey, HystrixCommandProperties properties, HystrixEventNotifier eventNotifier) {
         super(null);
         this.key = key;
@@ -437,10 +451,20 @@ public class HystrixCommandMetrics extends HystrixMetrics {
      * Number of requests during rolling window.
      * Number that failed (failure + success + timeout + threadPoolRejected + semaphoreRejected).
      * Error percentage;
+     * 健康计数器 就是统计异常 百分比 之类的
      */
     public static class HealthCounts {
+        /**
+         * 总调用次数
+         */
         private final long totalCount;
+        /**
+         * 异常次数
+         */
         private final long errorCount;
+        /**
+         * 异常百分比
+         */
         private final int errorPercentage;
 
         HealthCounts(long total, long error) {
@@ -453,6 +477,9 @@ public class HystrixCommandMetrics extends HystrixMetrics {
             }
         }
 
+        /**
+         * empty 对象 errorCount 和 totalCount 都是0
+         */
         private static final HealthCounts EMPTY = new HealthCounts(0, 0);
 
         public long getTotalRequests() {
@@ -467,6 +494,11 @@ public class HystrixCommandMetrics extends HystrixMetrics {
             return errorPercentage;
         }
 
+        /**
+         * 应该是从 bucket对象中 获取事件数据并填充到 count 中
+         * @param eventTypeCounts
+         * @return
+         */
         public HealthCounts plus(long[] eventTypeCounts) {
             long updatedTotalCount = totalCount;
             long updatedErrorCount = errorCount;
@@ -477,7 +509,9 @@ public class HystrixCommandMetrics extends HystrixMetrics {
             long threadPoolRejectedCount = eventTypeCounts[HystrixEventType.THREAD_POOL_REJECTED.ordinal()];
             long semaphoreRejectedCount = eventTypeCounts[HystrixEventType.SEMAPHORE_REJECTED.ordinal()];
 
+            // 增加总次数
             updatedTotalCount += (successCount + failureCount + timeoutCount + threadPoolRejectedCount + semaphoreRejectedCount);
+            // 增加失败次数
             updatedErrorCount += (failureCount + timeoutCount + threadPoolRejectedCount + semaphoreRejectedCount);
             return new HealthCounts(updatedTotalCount, updatedErrorCount);
         }
