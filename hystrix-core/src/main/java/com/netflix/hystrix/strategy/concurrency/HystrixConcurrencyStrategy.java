@@ -104,6 +104,7 @@ public abstract class HystrixConcurrencyStrategy {
      * @return
      */
     public ThreadPoolExecutor getThreadPool(final HystrixThreadPoolKey threadPoolKey, HystrixThreadPoolProperties threadPoolProperties) {
+        // 根据当前应用环境生成线程工厂  threadPoolKey 是线程的 前缀名
         final ThreadFactory threadFactory = getThreadFactory(threadPoolKey);
 
         // 从 poolProp 中获取相关属性  allowMaximumSizeToDivergeFromCoreSize 代表根据 coreSize 来推断 maxSize

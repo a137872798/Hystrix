@@ -104,7 +104,7 @@ public interface HystrixThreadPool {
         /*
          * Use the String from HystrixThreadPoolKey.name() instead of the HystrixThreadPoolKey instance as it's just an interface and we can't ensure the object
          * we receive implements hashcode/equals correctly and do not want the default hashcode/equals which would create a new threadpool for every object we get even if the name is the same
-         * factory 是 对应hystrix 的线程池工厂内部维护了  key 和 线程池对象的映射关系
+         * factory 是 对应hystrix 的线程池工厂内部维护了  key 和 线程池对象的映射关系  使用 静态容器 是为了保证 一个 key 对应到一个对象 如果没有统一的 容器去 维护 就会出现多个实例
          */
         /* package */final static ConcurrentHashMap<String, HystrixThreadPool> threadPools = new ConcurrentHashMap<String, HystrixThreadPool>();
 
@@ -115,6 +115,7 @@ public interface HystrixThreadPool {
          *
          * @return {@link HystrixThreadPool} instance
          * 获取实例对象 HystrixThreadPoolKey 只有一个name 属性  HystrixThreadPoolProperties 是对应到 hystrix线程池对象的属性
+         * 需要注意一点 如果 已经存在实例了 那么 即使 传入了 builder 对象 返回的 还是 使用之前的 builder 内属性的 线程池对象
          */
         /* package */static HystrixThreadPool getInstance(HystrixThreadPoolKey threadPoolKey, HystrixThreadPoolProperties.Setter propertiesBuilder) {
             // get the key to use instead of using the object itself so that if people forget to implement equals/hashcode things will still work
@@ -149,6 +150,7 @@ public interface HystrixThreadPool {
          */
         /* package */static synchronized void shutdown() {
             for (HystrixThreadPool pool : threadPools.values()) {
+                // 将 hystrix 中 封装的线程池 对象关闭
                 pool.getExecutor().shutdown();
             }
             threadPools.clear();
@@ -196,11 +198,11 @@ public interface HystrixThreadPool {
          */
         private final BlockingQueue<Runnable> queue;
         /**
-         * 线程池对象
+         * jdk的线程池对象  hystrix 就是 拓展了 原生的线程池对象
          */
         private final ThreadPoolExecutor threadPool;
         /**
-         * 该线程池 相关的测量对象
+         * 该线程池 相关的测量对象  跟 HealthCounterMetrics 是一个套路 也是 藉由rxjava 实现 数据流的加工 并统计需要的数据 比如被拒绝次数
          */
         private final HystrixThreadPoolMetrics metrics;
         /**
@@ -211,31 +213,44 @@ public interface HystrixThreadPool {
         /**
          * 初始化线程池对象
          * @param threadPoolKey
-         * @param propertiesDefaults
+         * @param propertiesDefaults  该对象是由调用者 传入的
          */
         public HystrixThreadPoolDefault(HystrixThreadPoolKey threadPoolKey, HystrixThreadPoolProperties.Setter propertiesDefaults) {
             // 传入 key 和  默认属性对象来生成一个新的 配置对象
             this.properties = HystrixPropertiesFactory.getThreadPoolProperties(threadPoolKey, propertiesDefaults);
-            // 获取并发策略对象
+            // 获取并发策略对象 也是 获取实现类对象 返回的对象 都是 以 Default 结尾的 没有任何追加功能 就是为了方便用户拓展
             HystrixConcurrencyStrategy concurrencyStrategy = HystrixPlugins.getInstance().getConcurrencyStrategy();
+            // 从属性中 获取 线程池 队列长度
             this.queueSize = properties.maxQueueSize().get();
 
+            // 传入线程池对象 生成一个统计对象
             this.metrics = HystrixThreadPoolMetrics.getInstance(threadPoolKey,
+                    // threadPoolKey 会作为 ThreadFactory 的线程名  其他 属性 比如 coreSize 就是从 prop 中获取
                     concurrencyStrategy.getThreadPool(threadPoolKey, properties),
                     properties);
             this.threadPool = this.metrics.getThreadPool();
             this.queue = this.threadPool.getQueue();
 
             /* strategy: HystrixMetricsPublisherThreadPool */
+            // 这里会初始化 线程池数据发布者对象
             HystrixMetricsPublisherFactory.createOrRetrievePublisherForThreadPool(threadPoolKey, this.metrics, this.properties);
         }
 
+        /**
+         * 获取jdk线程池
+         * @return
+         */
         @Override
         public ThreadPoolExecutor getExecutor() {
+            // 类似于 重置了 一遍属性
             touchConfig();
             return threadPool;
         }
 
+        /**
+         * 获取rxjava中的  线程池对象
+         * @return
+         */
         @Override
         public Scheduler getScheduler() {
             //by default, interrupt underlying threads on timeout
@@ -250,6 +265,7 @@ public interface HystrixThreadPool {
         @Override
         public Scheduler getScheduler(Func0<Boolean> shouldInterruptThread) {
             touchConfig();
+            // 生成一个调度对象
             return new HystrixContextScheduler(HystrixPlugins.getInstance().getConcurrencyStrategy(), this, shouldInterruptThread);
         }
 
@@ -281,6 +297,9 @@ public interface HystrixThreadPool {
             threadPool.setKeepAliveTime(properties.keepAliveTimeMinutes().get(), TimeUnit.MINUTES);
         }
 
+
+        // 下面3个方法都会增加对应的计数值
+
         @Override
         public void markThreadExecution() {
             metrics.markThreadExecution();
@@ -305,6 +324,7 @@ public interface HystrixThreadPool {
          * still get checked on each invocation.
          * <p>
          * If a SynchronousQueue implementation is used (<code>maxQueueSize</code> <= 0), it always returns 0 as the size so this would always return true.
+         * 是否有足够 空间
          */
         @Override
         public boolean isQueueSpaceAvailable() {

@@ -32,7 +32,7 @@ import java.util.List;
  */
 public class ExecutionResult {
     /**
-     * 事件计数器 ???
+     * 事件计数器  内部维护了 事件 中 collapser emit 等 发生的次数
      */
     private final EventCounts eventCounts;
     /**
@@ -48,7 +48,7 @@ public class ExecutionResult {
      */
     private final long startTimestamp;
     /**
-     * 执行的延迟时间
+     * 执行的延迟时间  代表 执行下次 run 的 延迟时间
      */
     private final int executionLatency; //time spent in run() method
     /**
@@ -56,7 +56,7 @@ public class ExecutionResult {
      */
     private final int userThreadLatency; //time elapsed between caller thread submitting request and response being visible to it
     /**
-     * 是否出现did
+     * 是否出现异常
      */
     private final boolean executionOccurred;
     /**
@@ -72,11 +72,22 @@ public class ExecutionResult {
      * 这里存放了所有的事件类型
      */
     private static final HystrixEventType[] ALL_EVENT_TYPES = HystrixEventType.values();
+    /**
+     * 所有事件的长度
+     */
     private static final int NUM_EVENT_TYPES = ALL_EVENT_TYPES.length;
-    // 2个 固定的位图对象
+    /**
+     * 用于存放 产生 exception 的事件对象
+     */
     private static final BitSet EXCEPTION_PRODUCING_EVENTS = new BitSet(NUM_EVENT_TYPES);
+    /**
+     * 产生终止事件的对象
+     */
     private static final BitSet TERMINAL_EVENTS = new BitSet(NUM_EVENT_TYPES);
 
+    /**
+     * 初始化时  将 exception 和 terminal 容器填充
+     */
     static {
         for (HystrixEventType eventType: HystrixEventType.EXCEPTION_PRODUCING_EVENT_TYPES) {
             EXCEPTION_PRODUCING_EVENTS.set(eventType.ordinal());
@@ -96,11 +107,11 @@ public class ExecutionResult {
          */
         private final BitSet events;
         /**
-         * 发行数量 ???
+         * 在 hystrix 中存在几种类型的事件 包含 发射事件  和 回退发射事件  这里就是记录了对应的事件
          */
         private final int numEmissions;
         /**
-         * 回退发行数量
+         * 回退数量
          */
         private final int numFallbackEmissions;
         /**
@@ -181,6 +192,12 @@ public class ExecutionResult {
             return plus(eventType, 1);
         }
 
+        /**
+         * 将 传入的 事件对象数据 与当前数据 累加  增加的 值 由 count 决定 一般就是1
+         * @param eventType
+         * @param count
+         * @return
+         */
         EventCounts plus(HystrixEventType eventType, int count) {
             // 拷贝当前 events 副本对象
             BitSet newBitSet = (BitSet) events.clone();
@@ -279,15 +296,15 @@ public class ExecutionResult {
 
     /**
      * 就是传入 各个 成员变量 进行初始化
-     * @param eventCounts
-     * @param startTimestamp
-     * @param executionLatency
-     * @param userThreadLatency
-     * @param failedExecutionException
-     * @param executionException
-     * @param executionOccurred
-     * @param isExecutedInThread
-     * @param collapserKey
+     * @param eventCounts 事件 计数器对象 代表记录了 本次command 执行时 产生的各种事件数量
+     * @param startTimestamp command 开始执行的 时间戳
+     * @param executionLatency  执行时的延迟
+     * @param userThreadLatency  线程池中的延迟
+     * @param failedExecutionException  执行过程中出现的异常
+     * @param executionException   执行出现的异常
+     * @param executionOccurred  是否 执行完成
+     * @param isExecutedInThread 是否在线程池中执行
+     * @param collapserKey  碰撞键
      */
     private ExecutionResult(EventCounts eventCounts, long startTimestamp, int executionLatency,
                             int userThreadLatency, Exception failedExecutionException, Exception executionException,
@@ -304,14 +321,17 @@ public class ExecutionResult {
     }
 
     // we can return a static version since it's immutable
+    // 可以立即获得一个 静态的版本 ???
     static ExecutionResult EMPTY = ExecutionResult.from();
 
     /**
-     * 一旦出现了 did 就 标识 didOccur 并初始化 对象
+     * 根据传入的 事件 数量 来生成  result 对象
+     * Eventcounter 对象 就是多个事件 发生次数 总和
      * @param eventTypes
      * @return
      */
     public static ExecutionResult from(HystrixEventType... eventTypes) {
+        // 是否 完成执行 ??? 无论 成功 失败 执行完成 才会设置成 true吧
         boolean didExecutionOccur = false;
         for (HystrixEventType eventType: eventTypes) {
             if (didExecutionOccur(eventType)) {
@@ -322,12 +342,14 @@ public class ExecutionResult {
     }
 
     /**
-     * 出现以下 枚举 就代表 orrurDid == true
+     * 判断是否出现了异常
      * @param eventType
      * @return
      */
     private static boolean didExecutionOccur(HystrixEventType eventType) {
         switch (eventType) {
+
+            // 下面的 几种枚举 都代表 执行完成
             case SUCCESS: return true;
             case FAILURE: return true;
             case BAD_REQUEST: return true;
@@ -337,7 +359,7 @@ public class ExecutionResult {
         }
     }
 
-    //  下面不同的方法 会返回不同的 ExecutionResult 对象
+    //  调用下面的 方法时 会返回一个 其他属性一致 只有设置的 属性不同的  result 对象
 
     public ExecutionResult setExecutionOccurred() {
         return new ExecutionResult(eventCounts, startTimestamp, executionLatency, userThreadLatency,
@@ -391,7 +413,7 @@ public class ExecutionResult {
 
     /**
      * Creates a new ExecutionResult by adding the defined 'event' to the ones on the current instance.
-     *
+     * 将传入的事件 添加到 count 中
      * @param eventType event to add
      * @return new {@link ExecutionResult} with event added
      */
@@ -443,10 +465,18 @@ public class ExecutionResult {
         return collapserKey;
     }
 
+    /**
+     * 一旦事件计数器中 携带了 semaphoreRejected  就代表 被信号量拒绝了
+     * @return
+     */
     public boolean isResponseSemaphoreRejected() {
         return eventCounts.contains(HystrixEventType.SEMAPHORE_REJECTED);
     }
 
+    /**
+     * 是否被线程池拒绝
+     * @return
+     */
     public boolean isResponseThreadPoolRejected() {
         return eventCounts.contains(HystrixEventType.THREAD_POOL_REJECTED);
     }
@@ -458,6 +488,7 @@ public class ExecutionResult {
     public List<HystrixEventType> getOrderedList() {
         List<HystrixEventType> eventList = new ArrayList<HystrixEventType>();
         for (HystrixEventType eventType: ALL_EVENT_TYPES) {
+            // 这个方法的意思 应该就是 按照All_EVENT_TYPES  的 顺序 将 count 中的 事件 添加到一个新的容器中
             if (eventCounts.contains(eventType)) {
                 eventList.add(eventType);
             }
@@ -465,10 +496,18 @@ public class ExecutionResult {
         return eventList;
     }
 
+    /**
+     * 是否在线程池中执行
+     * @return
+     */
     public boolean isExecutedInThread() {
         return isExecutedInThread;
     }
 
+    /**
+     * 是否正常执行
+     * @return
+     */
     public boolean executionOccurred() {
         return executionOccurred;
     }

@@ -34,6 +34,7 @@ import com.netflix.hystrix.strategy.metrics.HystrixMetricsPublisherThreadPool;
 
 /**
  * Coda Hale Metrics (https://github.com/codahale/metrics) implementation of {@link HystrixMetricsPublisher}.
+ * 将数据源 转换成 rxjava 中的  数据发布者
  */
 public class HystrixCodaHaleMetricsPublisher extends HystrixMetricsPublisher {
     private final String metricsRootNode;

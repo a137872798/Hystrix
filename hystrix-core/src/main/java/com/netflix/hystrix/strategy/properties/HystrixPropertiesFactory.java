@@ -116,7 +116,7 @@ public class HystrixPropertiesFactory {
     public static HystrixThreadPoolProperties getThreadPoolProperties(HystrixThreadPoolKey key, HystrixThreadPoolProperties.Setter builder) {
         // 通过 systemProp 或者 SPI 加载
         HystrixPropertiesStrategy hystrixPropertiesStrategy = HystrixPlugins.getInstance().getPropertiesStrategy();
-        // 尝试获取对应的缓存键
+        // 尝试获取对应的缓存键  这里默认是直接返回 HystrixThreadPoolKey.name 属性
         String cacheKey = hystrixPropertiesStrategy.getThreadPoolPropertiesCacheKey(key, builder);
         if (cacheKey != null) {
             //  获取被缓存的属性对象
@@ -125,11 +125,12 @@ public class HystrixPropertiesFactory {
                 return properties;
             } else {
                 if (builder == null) {
+                    // 新生成的 Setter 对象内部没有任何属性
                     builder = HystrixThreadPoolProperties.Setter();
                 }
-                // create new instance  使用builder 对象去 构建 prop 默认情况下 会从builder 中获取属性
+                // create new instance  使用builder 对象去 构建 prop 默认情况下 会从builder 中获取属性  如果builder 中没有属性就会获取 默认值
                 properties = hystrixPropertiesStrategy.getThreadPoolProperties(key, builder);
-                // cache and return
+                // cache and return 设置线程属性对象
                 HystrixThreadPoolProperties existing = threadPoolProperties.putIfAbsent(cacheKey, properties);
                 if (existing == null) {
                     return properties;
@@ -138,7 +139,8 @@ public class HystrixPropertiesFactory {
                 }
             }
         } else {
-            // no cacheKey so we generate it with caching 这里没有保存缓存 直接返回
+            // no cacheKey so we generate it with caching
+            // 如果没有缓存键 就无法被 缓存  这里就直接返回对象
             return hystrixPropertiesStrategy.getThreadPoolProperties(key, builder);
         }
     }

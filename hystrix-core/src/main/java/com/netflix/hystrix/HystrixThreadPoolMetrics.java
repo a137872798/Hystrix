@@ -101,6 +101,7 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
      * @param key
      *            {@link HystrixThreadPoolKey} of {@link HystrixThreadPool} instance requesting the {@link HystrixThreadPoolMetrics}
      * @return {@link HystrixThreadPoolMetrics}
+     * 根据 缓存键 获取对应的 测量对象
      */
     public static HystrixThreadPoolMetrics getInstance(HystrixThreadPoolKey key) {
         return metrics.get(key.name());
@@ -175,22 +176,51 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
         metrics.clear();
     }
 
+    /**
+     * 线程缓存键 对象
+     */
     private final HystrixThreadPoolKey threadPoolKey;
+    /**
+     * 被统计的 线程池 对象
+     */
     private final ThreadPoolExecutor threadPool;
+    /**
+     * 线程池相关的 属性对象
+     */
     private final HystrixThreadPoolProperties properties;
 
+    /**
+     * 当前执行的任务数
+     */
     private final AtomicInteger concurrentExecutionCount = new AtomicInteger();
 
+    /**
+     * 滚动线程池 事件计数流
+     */
     private final RollingThreadPoolEventCounterStream rollingCounterStream;
+    /**
+     * 累加线程池 事件计数流
+     */
     private final CumulativeThreadPoolEventCounterStream cumulativeCounterStream;
+    /**
+     * 滚动线程池 最大并发流
+     */
     private final RollingThreadPoolMaxConcurrencyStream rollingThreadPoolMaxConcurrencyStream;
 
+    /**
+     * 初始化 线程池对象
+     * @param threadPoolKey
+     * @param threadPool
+     * @param properties
+     */
     private HystrixThreadPoolMetrics(HystrixThreadPoolKey threadPoolKey, ThreadPoolExecutor threadPool, HystrixThreadPoolProperties properties) {
+        // 父类 本来内部是维护了一个 counter 对象 (包含了一个bucket 对象)  这里没有选择传入 并重写了 父类使用counter 的相关方法
         super(null);
         this.threadPoolKey = threadPoolKey;
         this.threadPool = threadPool;
         this.properties = properties;
 
+        // 调用静态方法 并生成对应的 数据流对象
         rollingCounterStream = RollingThreadPoolEventCounterStream.getInstance(threadPoolKey, properties);
         cumulativeCounterStream = CumulativeThreadPoolEventCounterStream.getInstance(threadPoolKey, properties);
         rollingThreadPoolMaxConcurrencyStream = RollingThreadPoolMaxConcurrencyStream.getInstance(threadPoolKey, properties);
@@ -227,6 +257,7 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
      * Value from {@link ThreadPoolExecutor#getActiveCount()}
      * 
      * @return Number
+     * 返回当前等待处理的 work
      */
     public Number getCurrentActiveCount() {
         return threadPool.getActiveCount();
@@ -236,6 +267,7 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
      * Value from {@link ThreadPoolExecutor#getCompletedTaskCount()}
      * 
      * @return Number
+     * 线程池本身包含 记录完成任务数量的 api
      */
     public Number getCurrentCompletedTaskCount() {
         return threadPool.getCompletedTaskCount();
@@ -295,6 +327,8 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
         return threadPool.getQueue().size();
     }
 
+    // 以上都是线程池相关的属性 重点是下面的 统计数据 怎么来
+
     /**
      * Invoked each time a thread is executed.
      */
@@ -308,6 +342,7 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
      * The rolling window is defined by {@link HystrixThreadPoolProperties#metricsRollingStatisticalWindowInMilliseconds()}.
      *
      * @return rolling count of threads executed
+     * 获取 滚动执行数量 rollingCounterStream 是 什么时候 统计到数据的
      */
     public long getRollingCountThreadsExecuted() {
         return rollingCounterStream.getLatestCount(HystrixEventType.ThreadPool.EXECUTED);
@@ -317,6 +352,7 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
      * Cumulative count of number of threads executed since the start of the application.
      * 
      * @return cumulative count of threads executed
+     * 获取累加值
      */
     public long getCumulativeCountThreadsExecuted() {
         return cumulativeCounterStream.getLatestCount(HystrixEventType.ThreadPool.EXECUTED);

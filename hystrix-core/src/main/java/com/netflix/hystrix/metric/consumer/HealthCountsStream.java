@@ -37,12 +37,12 @@ import java.util.concurrent.ConcurrentMap;
  * These values are stable - there's no peeking into a bucket until it is emitted
  *
  * These values get produced and cached in this class.  This value (the latest observed value) may be queried using {@link #getLatest()}.
- * 健康计数 流对象
+ * 健康计数 流对象  熔断器会订阅 该对象 便于 判断 是否满足被熔断条件
  */
 public class HealthCountsStream extends BucketedRollingCounterStream<HystrixCommandCompletion, long[], HystrixCommandMetrics.HealthCounts> {
 
     /**
-     * 缓存容器
+     * 缓存容器  key 应该是 commandKey 的name 属性
      */
     private static final ConcurrentMap<String, HealthCountsStream> streams = new ConcurrentHashMap<String, HealthCountsStream>();
 
@@ -53,6 +53,7 @@ public class HealthCountsStream extends BucketedRollingCounterStream<HystrixComm
 
     /**
      * 健康检查累加器  该函数的作用是 每次 将 bucket 中的数据 填充到传入的 healthCounts中
+     * 每个 bucket 对象就是一个 long[] 对象 每个下标 的数据对应一种事件
      */
     private static final Func2<HystrixCommandMetrics.HealthCounts, long[], HystrixCommandMetrics.HealthCounts> healthCheckAccumulator = new Func2<HystrixCommandMetrics.HealthCounts, long[], HystrixCommandMetrics.HealthCounts>() {
         @Override
@@ -69,22 +70,27 @@ public class HealthCountsStream extends BucketedRollingCounterStream<HystrixComm
      * @return
      */
     public static HealthCountsStream getInstance(HystrixCommandKey commandKey, HystrixCommandProperties properties) {
-        // 获取生成健康信息的 快照时间间隔
+        // 获取生成健康信息的 快照时间间隔    应该是 要至少 这么久的延时之后才允许返回 健康计数流对象
+        // bucket 的 大小 以时间为 单位 也就是 代表着 这个bucket  内的数据是统计了 多少时长内产生的数据
+        // 所以 这个 健康数据快照生成间隔 时间 也就对应到 桶的大小 每次 桶内最后累计的数据 正是本次快照的数据
         final int healthCountBucketSizeInMs = properties.metricsHealthSnapshotIntervalInMilliseconds().get();
+        // 看来该数值 不允许为 0
         if (healthCountBucketSizeInMs == 0) {
             throw new RuntimeException("You have set the bucket size to 0ms.  Please set a positive number, so that the metric stream can be properly consumed");
         }
         // 统计数据的 窗口大小 (这里 将 millisecond 看作是 容量) / 每个桶的容量 (时间)  得到的就是桶数
+        // 看来统计窗口代表 是一个比 bucket 更高的 统计单位 由多个bucket 大的数据组成
         final int numHealthCountBuckets = properties.metricsRollingStatisticalWindowInMilliseconds().get() / healthCountBucketSizeInMs;
 
+        // 获取单例对象
         return getInstance(commandKey, numHealthCountBuckets, healthCountBucketSizeInMs);
     }
 
     /**
      * 根据 commandKey  桶数  每个桶的 容量 生成 健康数据统计流
-     * @param commandKey
-     * @param numBuckets
-     * @param bucketSizeInMs
+     * @param commandKey  command key 对象 同于 标识 对应的 countstream
+     * @param numBuckets  桶的数量
+     * @param bucketSizeInMs  每个桶统计的时长
      * @return
      */
     public static HealthCountsStream getInstance(HystrixCommandKey commandKey, int numBuckets, int bucketSizeInMs) {
@@ -94,13 +100,14 @@ public class HealthCountsStream extends BucketedRollingCounterStream<HystrixComm
             // 从缓存返回
             return initialStream;
         } else {
+            // 尝试生成一个 全新的健康数据流对象
             final HealthCountsStream healthStream;
             synchronized (HealthCountsStream.class) {
                 HealthCountsStream existingStream = streams.get(commandKey.name());
                 if (existingStream == null) {
                     // 创建一个 新的数据流
                     HealthCountsStream newStream = new HealthCountsStream(commandKey, numBuckets, bucketSizeInMs,
-                            // 该对象就是将入参 的 统计值 转移到 bucket中
+                            // appendEventTobucket 对象 代表从 commandComplete 中结果 取出 并设置到 bucket 中
                             HystrixCommandMetrics.appendEventToBucket);
 
                     streams.putIfAbsent(commandKey.name(), newStream);
@@ -109,7 +116,7 @@ public class HealthCountsStream extends BucketedRollingCounterStream<HystrixComm
                     healthStream = existingStream;
                 }
             }
-            // 启动
+            // 使用 BehaviorSubject 作为 订阅者
             healthStream.startCachingStreamValuesIfUnstarted();
             return healthStream;
         }
@@ -153,7 +160,7 @@ public class HealthCountsStream extends BucketedRollingCounterStream<HystrixComm
     }
 
     /**
-     * 返回空值
+     * 返回一个HealthCount 中 数值都为 的对象
      * @return
      */
     @Override

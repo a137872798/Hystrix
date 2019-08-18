@@ -38,7 +38,7 @@ import com.netflix.hystrix.strategy.HystrixPlugins;
  * <p>
  * See {@link HystrixPlugins} or the Hystrix GitHub Wiki for information on configuring plugins: <a
  * href="https://github.com/Netflix/Hystrix/wiki/Plugins">https://github.com/Netflix/Hystrix/wiki/Plugins</a>.
- * 测量发布者???
+ * 有关测量数据的 发布者 测量对象应该是订阅者 而 发布者对象 具备 从 需要被测量的 对象中统一抽象出 获取数据的能力
  */
 public abstract class HystrixMetricsPublisher {
 

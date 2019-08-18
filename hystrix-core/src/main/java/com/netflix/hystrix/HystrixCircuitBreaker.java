@@ -155,7 +155,7 @@ public interface HystrixCircuitBreaker {
          */
         private final HystrixCommandProperties properties;
         /**
-         * 命令相关的统计对象
+         * 命令相关的测量对象 该对象是由外部传来的
          */
         private final HystrixCommandMetrics metrics;
 
@@ -182,18 +182,23 @@ public interface HystrixCircuitBreaker {
          */
         private final AtomicReference<Status> status = new AtomicReference<Status>(Status.CLOSED);
         /**
-         * 循环被打开???
+         * 断路器 是否被打开
          */
         private final AtomicLong circuitOpened = new AtomicLong(-1);
         /**
-         * 活跃订阅
+         * 订阅者对象
          */
         private final AtomicReference<Subscription> activeSubscription = new AtomicReference<Subscription>(null);
 
         /**
-         * 断路器对象 使用 command 和 metrics 进行初始化
+         * 熔断器 对象 使用  commandKey  commandGroupKey metrics 进行初始化
+         * @param key
+         * @param commandGroup
+         * @param properties
+         * @param metrics
          */
         protected HystrixCircuitBreakerImpl(HystrixCommandKey key, HystrixCommandGroupKey commandGroup, final HystrixCommandProperties properties, HystrixCommandMetrics metrics) {
+            // 设置 hustrix 的 属性和 测量对象
             this.properties = properties;
             this.metrics = metrics;
 
@@ -211,9 +216,12 @@ public interface HystrixCircuitBreaker {
         private Subscription subscribeToStream() {
             /*
              * This stream will recalculate the OPEN/CLOSED status on every onNext from the health stream
+             * metrics 内部 维护了 各种 数据流 (基于rxjava 的observable 对象)  这里 获取到需要观察的流 并根据 成功 次数 等 判断是否要 熔断
              */
             return metrics.getHealthCountsStream()
+                    // 这时 获取到的observe 是 已经将 bucket 流处理过了 (已经开启了 多播和背压)
                     .observe()
+                    // 设置订阅者对象
                     .subscribe(new Subscriber<HealthCounts>() {
                         @Override
                         public void onCompleted() {
@@ -225,9 +233,14 @@ public interface HystrixCircuitBreaker {
 
                         }
 
+                        /**
+                         * 处理收到的 stream 中的数据
+                         * @param hc
+                         */
                         @Override
                         public void onNext(HealthCounts hc) {
                             // check if we are past the statisticalWindowVolumeThreshold
+                            // 如果请求数小于 触发熔断的请求数 不做任何处理
                             if (hc.getTotalRequests() < properties.circuitBreakerRequestVolumeThreshold().get()) {
                                 // we are not past the minimum volume threshold for the stat window,
                                 // so no change to circuit status.
@@ -235,6 +248,7 @@ public interface HystrixCircuitBreaker {
                                 // if it was half-open, we need to wait for a successful command execution
                                 // if it was open, we need to wait for sleep window to elapse
                             } else {
+                                // 这里开始 判断是否需要熔断 如果 失败比率 低于 熔断 比率 不进行处理
                                 if (hc.getErrorPercentage() < properties.circuitBreakerErrorThresholdPercentage().get()) {
                                     //we are not past the minimum error threshold for the stat window,
                                     // so no change to circuit status.
@@ -243,7 +257,9 @@ public interface HystrixCircuitBreaker {
                                     // if it was open, we need to wait for sleep window to elapse
                                 } else {
                                     // our failure rate is too high, we need to set the state to OPEN
+                                    // 开启熔断器
                                     if (status.compareAndSet(Status.CLOSED, Status.OPEN)) {
+                                        // 设置熔断器触发时间
                                         circuitOpened.set(System.currentTimeMillis());
                                     }
                                 }
@@ -252,21 +268,32 @@ public interface HystrixCircuitBreaker {
                     });
         }
 
+        /**
+         * 标记成功状态  代表熔断器 需要从 半开模式 变成关闭模式
+         */
         @Override
         public void markSuccess() {
+            // 如果是半开状态的话 才能被 设置成关闭
             if (status.compareAndSet(Status.HALF_OPEN, Status.CLOSED)) {
                 //This thread wins the race to close the circuit - it resets the stream to start it over from 0
+                // 重置之前统计的 数据
                 metrics.resetStream();
+                // 在重置的情况下 当前维护的订阅者 也要关闭
                 Subscription previousSubscription = activeSubscription.get();
                 if (previousSubscription != null) {
                     previousSubscription.unsubscribe();
                 }
+                // 生成一个新的订阅者对象 并设置
                 Subscription newSubscription = subscribeToStream();
                 activeSubscription.set(newSubscription);
+                // 重置熔断时间
                 circuitOpened.set(-1L);
             }
         }
 
+        /**
+         * 将 半开模式 重新变成 开放模式
+         */
         @Override
         public void markNonSuccess() {
             if (status.compareAndSet(Status.HALF_OPEN, Status.OPEN)) {
@@ -275,17 +302,28 @@ public interface HystrixCircuitBreaker {
             }
         }
 
+        /**
+         * 判断熔断器是否打开
+         * @return
+         */
         @Override
         public boolean isOpen() {
+            // 如果时 强制打开 熔断器的话 返回true
             if (properties.circuitBreakerForceOpen().get()) {
                 return true;
             }
+            // 同上
             if (properties.circuitBreakerForceClosed().get()) {
                 return false;
             }
+            // 判断熔断时间
             return circuitOpened.get() >= 0;
         }
 
+        /**
+         * 是否允许接受请求
+         * @return
+         */
         @Override
         public boolean allowRequest() {
             if (properties.circuitBreakerForceOpen().get()) {
@@ -297,21 +335,32 @@ public interface HystrixCircuitBreaker {
             if (circuitOpened.get() == -1) {
                 return true;
             } else {
+                // 判断当前是否处于 半开状态 是 就禁止请求
                 if (status.get().equals(Status.HALF_OPEN)) {
                     return false;
                 } else {
+                    // 是否在沉睡窗口 如果当前时间 在上次断路时间 + 沉睡时间之上的 话 就允许接受请求 这里应该 会将 OPEN -> HALF_OPEN
                     return isAfterSleepWindow();
                 }
             }
         }
 
+        /**
+         * 是否 在 沉睡窗口
+         * @return
+         */
         private boolean isAfterSleepWindow() {
             final long circuitOpenTime = circuitOpened.get();
             final long currentTime = System.currentTimeMillis();
+            // 获取熔断器沉睡时间
             final long sleepWindowTime = properties.circuitBreakerSleepWindowInMilliseconds().get();
             return currentTime > circuitOpenTime + sleepWindowTime;
         }
 
+        /**
+         * 尝试执行
+         * @return
+         */
         @Override
         public boolean attemptExecution() {
             if (properties.circuitBreakerForceOpen().get()) {
@@ -323,11 +372,13 @@ public interface HystrixCircuitBreaker {
             if (circuitOpened.get() == -1) {
                 return true;
             } else {
+                // 如果 超过沉睡时间
                 if (isAfterSleepWindow()) {
                     //only the first request after sleep window should execute
                     //if the executing command succeeds, the status will transition to CLOSED
                     //if the executing command fails, the status will transition to OPEN
                     //if the executing command gets unsubscribed, the status will transition to OPEN
+                    // 修改成半开状态 之后如果 成功 应该就是 调用 markSuccess 修改成 打开 否则 修改成 关闭
                     if (status.compareAndSet(Status.OPEN, Status.HALF_OPEN)) {
                         return true;
                     } else {
@@ -342,6 +393,7 @@ public interface HystrixCircuitBreaker {
 
     /**
      * An implementation of the circuit breaker that does nothing.
+     * 空的 熔断器 对象 总是允许接受请求  处于Close 状态
      *
      * @ExcludeFromJavadoc
      */

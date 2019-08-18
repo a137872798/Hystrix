@@ -29,11 +29,21 @@ import com.netflix.hystrix.strategy.HystrixPlugins;
 /**
  * Wrap a {@link Scheduler} so that scheduled actions are wrapped with {@link HystrixContexSchedulerAction} so that
  * the {@link HystrixRequestContext} is properly copied across threads (if they are used by the {@link Scheduler}).
+ * hystrix 定时器对象
  */
 public class HystrixContextScheduler extends Scheduler {
 
+    /**
+     * 存放线程池相关属性
+     */
     private final HystrixConcurrencyStrategy concurrencyStrategy;
+    /**
+     * rxjava 中的 scheduler 对象
+     */
     private final Scheduler actualScheduler;
+    /**
+     * 封装了 jdk 线程池对象 以及 统计对象和 hystrix 属性对象
+     */
     private final HystrixThreadPool threadPool;
 
     public HystrixContextScheduler(Scheduler scheduler) {
@@ -60,14 +70,19 @@ public class HystrixContextScheduler extends Scheduler {
     public HystrixContextScheduler(HystrixConcurrencyStrategy concurrencyStrategy, HystrixThreadPool threadPool, Func0<Boolean> shouldInterruptThread) {
         this.concurrencyStrategy = concurrencyStrategy;
         this.threadPool = threadPool;
+        // 生成线程池调度器  shouldInterruptThread 代表是否应该发起 中断当前线程的 指令
         this.actualScheduler = new ThreadPoolScheduler(threadPool, shouldInterruptThread);
     }
 
+    // 这里就是 把 worker 封装了一层
     @Override
     public Worker createWorker() {
         return new HystrixContextSchedulerWorker(actualScheduler.createWorker());
     }
 
+    /**
+     * rxjava 的 调度器 代理对象
+     */
     private class HystrixContextSchedulerWorker extends Worker {
 
         private final Worker worker;
@@ -86,6 +101,13 @@ public class HystrixContextScheduler extends Scheduler {
             return worker.isUnsubscribed();
         }
 
+        /**
+         *
+         * @param action
+         * @param delayTime
+         * @param unit
+         * @return
+         */
         @Override
         public Subscription schedule(Action0 action, long delayTime, TimeUnit unit) {
             if (threadPool != null) {

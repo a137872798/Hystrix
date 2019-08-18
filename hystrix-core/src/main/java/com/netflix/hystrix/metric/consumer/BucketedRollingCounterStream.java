@@ -47,7 +47,7 @@ public abstract class BucketedRollingCounterStream<Event extends HystrixEvent, B
      * @param stream 传入的事件流
      * @param numBuckets 桶数
      * @param bucketSizeInMs 每过多少秒 切换到下一个桶
-     * @param appendRawEventToBucket  将数据追加到 桶中
+     * @param appendRawEventToBucket  将数据从 时间对象中追加到 桶中的函数，
      * @param reduceBucket   好像是从桶中 取出数据到 输出流对象（非java.io 对象）
      */
     protected BucketedRollingCounterStream(HystrixEventStream<Event> stream, final int numBuckets, int bucketSizeInMs,

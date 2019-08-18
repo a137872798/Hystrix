@@ -112,7 +112,7 @@ public class HystrixPlugins {
         });
     }
     /**
-     * 创建一个熔断插件对象
+     * 创建一个插件对象
      * @ExcludeFromJavadoc
      */
     /* private */ static HystrixPlugins create() {

@@ -28,7 +28,7 @@ import java.util.List;
  */
 public enum HystrixEventType {
     /**
-     * 忽略
+     * 发射事件
      */
     EMIT(false),
     /**
@@ -48,7 +48,7 @@ public enum HystrixEventType {
      */
     BAD_REQUEST(true),
     /**
-     * 短循环
+     * 被短路
      */
     SHORT_CIRCUITED(false),
     /**
@@ -60,7 +60,7 @@ public enum HystrixEventType {
      */
     SEMAPHORE_REJECTED(false),
     /**
-     * 回退引发的忽略
+     * 回退发射
      */
     FALLBACK_EMIT(false),
     /**

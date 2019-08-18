@@ -223,20 +223,23 @@ import java.util.concurrent.atomic.AtomicReference;
     protected volatile ExecutionResult executionResult = ExecutionResult.EMPTY; //state on shared execution
 
     /**
-     * 是否从缓存中获取 res
+     * 是否从缓存中获取 resExecutionResult
      */
     protected volatile boolean isResponseFromCache = false;
     /**
-     * 执行结果对象
+     * 执行某个Command 时 产生的结果
      */
     protected volatile ExecutionResult executionResultAtTimeOfCancellation;
+    /**
+     * 命令开始的时间
+     */
     protected volatile long commandStartTimestamp = -1L;
 
     /* If this command executed and timed-out */
     // 超时状态的 原子引用
     protected final AtomicReference<TimedOutStatus> isCommandTimedOut = new AtomicReference<TimedOutStatus>(TimedOutStatus.NOT_EXECUTED);
     /**
-     * 0参数的 回调对象
+     * 当 执行完 command 时 执行的 函数
      */
     protected volatile Action0 endCurrentThreadExecutingCommand;
 
@@ -262,6 +265,11 @@ import java.util.concurrent.atomic.AtomicReference;
      */
     protected static ConcurrentHashMap<HystrixCommandKey, Boolean> commandContainsFallback = new ConcurrentHashMap<HystrixCommandKey, Boolean>();
 
+    /**
+     * 尝试 获取 指定 class 类的 simpleName  这个对象 为什么要做缓存 ???
+     * @param cls
+     * @return
+     */
     /* package */static String getDefaultNameFromClass(Class<?> cls) {
         // 传入class 对象获取缓存键
         String fromCache = defaultNameCache.get(cls);
@@ -286,15 +294,15 @@ import java.util.concurrent.atomic.AtomicReference;
      * @param group 该对象也是只有一个name 属性
      * @param key 该对象就一个name 属性
      * @param threadPoolKey 也是只有一个name 属性
-     * @param circuitBreaker
-     * @param threadPool
-     * @param commandPropertiesDefaults
-     * @param threadPoolPropertiesDefaults
-     * @param metrics
-     * @param fallbackSemaphore
-     * @param executionSemaphore
-     * @param propertiesStrategy
-     * @param executionHook
+     * @param circuitBreaker  熔断器对象
+     * @param threadPool  线程池 对象
+     * @param commandPropertiesDefaults  command 默认的属性
+     * @param threadPoolPropertiesDefaults  线程池 默认的属性
+     * @param metrics   测量对象
+     * @param fallbackSemaphore   处理 回退 的信号量对象
+     * @param executionSemaphore    处理 执行的 信号量对象
+     * @param propertiesStrategy   属性策略对象
+     * @param executionHook  执行钩子
      */
     protected AbstractCommand(HystrixCommandGroupKey group, HystrixCommandKey key, HystrixThreadPoolKey threadPoolKey, HystrixCircuitBreaker circuitBreaker, HystrixThreadPool threadPool,
             HystrixCommandProperties.Setter commandPropertiesDefaults, HystrixThreadPoolProperties.Setter threadPoolPropertiesDefaults,

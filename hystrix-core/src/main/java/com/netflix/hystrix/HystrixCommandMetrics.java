@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Used by {@link HystrixCommand} to record metrics.
- * 关于 command 的统计对象
+ * 关于 command 的统计对象  hystrix 中很多组件 比如 熔断器 就是根据 订阅统计到的数据 来判断是否满足熔断条件
  */
 public class HystrixCommandMetrics extends HystrixMetrics {
 
@@ -55,10 +55,10 @@ public class HystrixCommandMetrics extends HystrixMetrics {
      */
     public static final Func2<long[], HystrixCommandCompletion, long[]> appendEventToBucket = new Func2<long[], HystrixCommandCompletion, long[]>() {
 
-        // 针对 完成的 Command 执行 fun
+        // 将本次 command 的执行  结果设置到 初始 bucket 中 并返回 累加数据后的 bucket
         @Override
         public long[] call(long[] initialCountArray, HystrixCommandCompletion execution) {
-            // 获取事件计数器
+            // 获取事件计数器  本次执行中 产生的 数据 都会填充到 eventCount 中
             ExecutionResult.EventCounts eventCounts = execution.getEventCounts();
             for (HystrixEventType eventType: ALL_EVENT_TYPES) {
                 switch (eventType) {
@@ -220,7 +220,7 @@ public class HystrixCommandMetrics extends HystrixMetrics {
     private final AtomicInteger concurrentExecutionCount = new AtomicInteger();
 
     /**
-     * 健康计数流 ???  内部是 关于 HealthCounts 的数据流
+     * 健康计数流 熔断器 根据执行的command 的 健康状况来判断是否需要进行熔断
      */
     private HealthCountsStream healthCountsStream;
     /**
@@ -240,8 +240,8 @@ public class HystrixCommandMetrics extends HystrixMetrics {
 
     /**
      * 初始化 统计数据的对象
-     * @param key
-     * @param commandGroup
+     * @param key  用于标识 本 统计数据对象 观察的是 哪个 command
+     * @param commandGroup  代表本command 属于哪个 commandGroup
      * @param threadPoolKey
      * @param properties
      * @param eventNotifier
@@ -253,6 +253,7 @@ public class HystrixCommandMetrics extends HystrixMetrics {
         this.threadPoolKey = threadPoolKey;
         this.properties = properties;
 
+        // 初始化健康流数据对象
         healthCountsStream = HealthCountsStream.getInstance(key, properties);
         rollingCommandEventCounterStream = RollingCommandEventCounterStream.getInstance(key, properties);
         cumulativeCommandEventCounterStream = CumulativeCommandEventCounterStream.getInstance(key, properties);
@@ -262,9 +263,14 @@ public class HystrixCommandMetrics extends HystrixMetrics {
         rollingCommandMaxConcurrencyStream = RollingCommandMaxConcurrencyStream.getInstance(key, properties);
     }
 
+    /**
+     * 当熔断器 从 半开状态变为 关闭时 触发
+     */
     /* package */ synchronized void resetStream() {
+        // 清除当前的 订阅者
         healthCountsStream.unsubscribe();
         HealthCountsStream.removeByKey(key);
+        // getInstance 会 重新 给 内部的 静态变量 设置对象  使用 内部的静态变量维护关系是为了实现 全局单例 该对象在生成时 会自动设置一个订阅者对象
         healthCountsStream = HealthCountsStream.getInstance(key, properties);
     }
 
@@ -407,6 +413,10 @@ public class HystrixCommandMetrics extends HystrixMetrics {
         }
     }
 
+    /**
+     * 返回一个 健康计数流对象
+     * @return
+     */
     /* package-private */ HealthCountsStream getHealthCountsStream() {
         return healthCountsStream;
     }

@@ -39,6 +39,7 @@ import com.netflix.hystrix.strategy.HystrixPlugins;
  * This uses given {@link HystrixMetricsPublisher} implementations to construct publisher instances and caches each instance according to the cache key provided.
  * 
  * @ExcludeFromJavadoc
+ * 统计对象 发布者 工厂
  */
 public class HystrixMetricsPublisherFactory {
 
@@ -121,8 +122,18 @@ public class HystrixMetricsPublisherFactory {
     }
 
     // String is ThreadPoolKey.name() (we can't use ThreadPoolKey directly as we can't guarantee it implements hashcode/equals correctly)
+    /**
+     * 线程池 数据 提供者对象
+     */
     private final ConcurrentHashMap<String, HystrixMetricsPublisherThreadPool> threadPoolPublishers = new ConcurrentHashMap<String, HystrixMetricsPublisherThreadPool>();
 
+    /**
+     * 获取 publisher 对象
+     * @param threadPoolKey  线程池 缓存键
+     * @param metrics    测量对象
+     * @param properties    属性对象
+     * @return
+     */
     /* package */ HystrixMetricsPublisherThreadPool getPublisherForThreadPool(HystrixThreadPoolKey threadPoolKey, HystrixThreadPoolMetrics metrics, HystrixThreadPoolProperties properties) {
         // attempt to retrieve from cache first
         HystrixMetricsPublisherThreadPool publisher = threadPoolPublishers.get(threadPoolKey.name());
@@ -130,11 +141,13 @@ public class HystrixMetricsPublisherFactory {
             return publisher;
         }
         // it doesn't exist so we need to create it
+        // 获取 有关 ThreadPool 的 测量数据发布对象
         publisher = HystrixPlugins.getInstance().getMetricsPublisher().getMetricsPublisherForThreadPool(threadPoolKey, metrics, properties);
         // attempt to store it (race other threads)
         HystrixMetricsPublisherThreadPool existing = threadPoolPublishers.putIfAbsent(threadPoolKey.name(), publisher);
         if (existing == null) {
             // we won the thread-race to store the instance we created so initialize it
+            // 完成初始化 这样 该对象就可以发布数据了
             publisher.initialize();
             // done registering, return instance that got cached
             return publisher;

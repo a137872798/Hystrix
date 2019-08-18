@@ -126,7 +126,7 @@ public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, 
     public abstract Observable<Output> observe();
 
     /**
-     * 当 订阅者还没有创建时 使用subject订阅可观察对象
+     * 当 订阅者还没有创建时 使用subject订阅可观察对象  一般情况下在 创建子类的 数据流时 就会调用该方法 为 observable 对象设置订阅者
      */
     public void startCachingStreamValuesIfUnstarted() {
         if (subscription.get() == null) {
