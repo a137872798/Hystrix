@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Cache that is scoped to the current request as managed by {@link HystrixRequestVariableDefault}.
  * <p>
  * This is used for short-lived caching of {@link HystrixCommand} instances to allow de-duping of command executions within a request.
- * 断路器的 请求缓存对象
+ * 请求缓存对象 每个对象对应一个 RequestCacheKey
  */
 public class HystrixRequestCache {
     @SuppressWarnings("unused")
@@ -73,6 +73,11 @@ public class HystrixRequestCache {
 
     });
 
+    /**
+     * 请求缓存对象 通过 缓存键和 并发策略生成
+     * @param rcKey
+     * @param concurrencyStrategy
+     */
     private HystrixRequestCache(RequestCacheKey rcKey, HystrixConcurrencyStrategy concurrencyStrategy) {
         this.rcKey = rcKey;
         this.concurrencyStrategy = concurrencyStrategy;
@@ -89,7 +94,7 @@ public class HystrixRequestCache {
     /**
      * 根据 cacheKey 获取缓存对象
      * @param rcKey
-     * @param concurrencyStrategy
+     * @param concurrencyStrategy  代表没有获取到缓存的情况 使用该对象 创建 requestCache
      * @return
      */
     private static HystrixRequestCache getInstance(RequestCacheKey rcKey, HystrixConcurrencyStrategy concurrencyStrategy) {
@@ -120,6 +125,7 @@ public class HystrixRequestCache {
     /* package */<T> HystrixCachedObservable<T> get(String cacheKey) {
         ValueCacheKey key = getRequestCacheKey(cacheKey);
         if (key != null) {
+            // 这里首先要保证 能够通过 strategy 对象获取到 容器对象 否则抛出异常  get的时候默认会调用 init方法去初始化一个 chm 对象 这里一般是不会存在返回null 的情况
             ConcurrentHashMap<ValueCacheKey, HystrixCachedObservable<?>> cacheInstance = requestVariableForCache.get(concurrencyStrategy);
             if (cacheInstance == null) {
                 throw new IllegalStateException("Request caching is not available. Maybe you need to initialize the HystrixRequestContext?");
@@ -145,6 +151,7 @@ public class HystrixRequestCache {
     // suppressing warnings because we are using a raw Future since it's in a heterogeneous ConcurrentHashMap cache
     @SuppressWarnings({ "unchecked" })
     /* package */<T> HystrixCachedObservable<T> putIfAbsent(String cacheKey, HystrixCachedObservable<T> f) {
+        // ValueCacheKey 内部维护了 requestCache 对象 该 缓存键是用来获取 CacheObservable 对象
         ValueCacheKey key = getRequestCacheKey(cacheKey);
         if (key != null) {
             /* look for the stored value */
@@ -198,8 +205,17 @@ public class HystrixRequestCache {
         return null;
     }
 
+    /**
+     * value 的缓存对象 内部维护了 RequestCacheKey 对象
+     */
     private static class ValueCacheKey {
+        /**
+         * 请求缓存键
+         */
         private final RequestCacheKey rvKey;
+        /**
+         * 数值的缓存键
+         */
         private final String valueCacheKey;
 
         private ValueCacheKey(RequestCacheKey rvKey, String valueCacheKey) {

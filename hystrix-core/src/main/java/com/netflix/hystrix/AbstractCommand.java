@@ -70,7 +70,7 @@ import java.util.concurrent.atomic.AtomicReference;
      */
     protected final HystrixCircuitBreaker circuitBreaker;
     /**
-     * hystrix 线程池对象
+     * hystrix 线程池对象 请求应该都会发送到该对象中 执行
      */
     protected final HystrixThreadPool threadPool;
     /**
@@ -168,18 +168,18 @@ import java.util.concurrent.atomic.AtomicReference;
      */
     protected final HystrixConcurrencyStrategy concurrencyStrategy;
     /**
-     * 命令执行钩子
+     * 命令执行钩子  作用于不同的 生命周期中
      */
     protected final HystrixCommandExecutionHook executionHook;
 
     /* FALLBACK Semaphore */
     /**
-     * 重试信号量 (回退)
+     * 重试信号量
      */
     protected final TryableSemaphore fallbackSemaphoreOverride;
     /* each circuit has a semaphore to restrict concurrent fallback execution */
     /**
-     * 每个循环器 有自己的 回退信号量???
+     * 每个循环器 有自己的 回退信号量???  回退次数可能是指 没有获取到 信号量的请求对象 重试 尝试获得 重新执行机会
      */
     protected static final ConcurrentHashMap<String, TryableSemaphore> fallbackSemaphorePerCircuit = new ConcurrentHashMap<String, TryableSemaphore>();
     /* END FALLBACK Semaphore */
@@ -195,7 +195,7 @@ import java.util.concurrent.atomic.AtomicReference;
     /* END EXECUTION Semaphore */
 
     /**
-     * 时间监听器对象 内部只有一个 获取下次 嘀嗒的时间间隔
+     * 时间监听器对象 一般是 配合 HystrixTimer 对象 (hystrixTimer 是一个 定时器对象 当添加 listener 到 timer 时 就会定时执行 listener.tick() 的逻辑)
      */
     protected final AtomicReference<Reference<TimerListener>> timeoutTimer = new AtomicReference<Reference<TimerListener>>();
 
@@ -218,7 +218,7 @@ import java.util.concurrent.atomic.AtomicReference;
      * other commands.
      *
      * Examples: RESPONSE_FROM_CACHE, CANCELLED HystrixEventTypes
-     * 执行结果
+     * 执行结果 内部维护一个 counter 对象 记录本次调用相关的计数 (比如 成功次数 失败次数等)
      */
     protected volatile ExecutionResult executionResult = ExecutionResult.EMPTY; //state on shared execution
 
@@ -245,11 +245,11 @@ import java.util.concurrent.atomic.AtomicReference;
 
     /**
      * Instance of RequestCache logic
-     * 请求缓存对象
+     * 请求缓存对象  内部核心键值对就是  ValueCacheKey, HystrixCachedObservable<?>  ValueCacheKey 是使用 RequestKey 生成的 保证一个 request 对应一个 observable
      */
     protected final HystrixRequestCache requestCache;
     /**
-     * 请求日志
+     * 请求日志  在执行某个命令时 就会将日志信息输入到 该 requestLog 对象中
      */
     protected final HystrixRequestLog currentRequestLog;
 
@@ -261,7 +261,7 @@ import java.util.concurrent.atomic.AtomicReference;
     private static ConcurrentHashMap<Class<?>, String> defaultNameCache = new ConcurrentHashMap<Class<?>, String>();
 
     /**
-     * 回退命令容器 ???
+     * 回退命令容器 应该是 代表 某条命令是否回退
      */
     protected static ConcurrentHashMap<HystrixCommandKey, Boolean> commandContainsFallback = new ConcurrentHashMap<HystrixCommandKey, Boolean>();
 
@@ -309,21 +309,33 @@ import java.util.concurrent.atomic.AtomicReference;
             HystrixCommandMetrics metrics, TryableSemaphore fallbackSemaphore, TryableSemaphore executionSemaphore,
             HystrixPropertiesStrategy propertiesStrategy, HystrixCommandExecutionHook executionHook) {
 
+        // 非空校验
         this.commandGroup = initGroupKey(group);
+        // 如果 key 为空使用 className 作为缓存命令键名
         this.commandKey = initCommandKey(key, getClass());
+        // 如果 prop 为空 使用 commandPropertiesDefaults 去初始化一个新对象
         this.properties = initCommandProperties(this.commandKey, propertiesStrategy, commandPropertiesDefaults);
+        // 初始化线程池Key
         this.threadPoolKey = initThreadPoolKey(threadPoolKey, this.commandGroup, this.properties.executionIsolationThreadPoolKeyOverride().get());
+        // 初始化 测量对象
         this.metrics = initMetrics(metrics, this.commandGroup, this.threadPoolKey, this.commandKey, this.properties);
+        // 初始化 熔断器对象
         this.circuitBreaker = initCircuitBreaker(this.properties.circuitBreakerEnabled().get(), circuitBreaker, this.commandGroup, this.commandKey, this.properties, this.metrics);
+        // 初始化线程池对象
         this.threadPool = initThreadPool(threadPool, this.threadPoolKey, threadPoolPropertiesDefaults);
 
         //Strategies from plugins
         this.eventNotifier = HystrixPlugins.getInstance().getEventNotifier();
         this.concurrencyStrategy = HystrixPlugins.getInstance().getConcurrencyStrategy();
+
+        // 初始化 有关 command 的数据发布对象
         HystrixMetricsPublisherFactory.createOrRetrievePublisherForCommand(this.commandKey, this.commandGroup, this.metrics, this.circuitBreaker, this.properties);
+        // 初始化 钩子对象
         this.executionHook = initExecutionHook(executionHook);
 
+        // 获取请求缓存对象
         this.requestCache = HystrixRequestCache.getInstance(this.commandKey, this.concurrencyStrategy);
+        // 根据 请求对象 在 执行过程中的 情况 记录 日志
         this.currentRequestLog = initRequestLog(this.properties.requestLogEnabled().get(), this.concurrencyStrategy);
 
         /* fallback semaphore override if applicable */
@@ -333,6 +345,11 @@ import java.util.concurrent.atomic.AtomicReference;
         this.executionSemaphoreOverride = executionSemaphore;
     }
 
+    /**
+     * 非空校验
+     * @param fromConstructor
+     * @return
+     */
     private static HystrixCommandGroupKey initGroupKey(final HystrixCommandGroupKey fromConstructor) {
         if (fromConstructor == null) {
             throw new IllegalStateException("HystrixCommandGroup can not be NULL");
@@ -350,6 +367,13 @@ import java.util.concurrent.atomic.AtomicReference;
         }
     }
 
+    /**
+     * 获取属性对象
+     * @param commandKey
+     * @param propertiesStrategy
+     * @param commandPropertiesDefaults
+     * @return
+     */
     private static HystrixCommandProperties initCommandProperties(HystrixCommandKey commandKey, HystrixPropertiesStrategy propertiesStrategy, HystrixCommandProperties.Setter commandPropertiesDefaults) {
         if (propertiesStrategy == null) {
             return HystrixPropertiesFactory.getCommandProperties(commandKey, commandPropertiesDefaults);
@@ -383,6 +407,9 @@ import java.util.concurrent.atomic.AtomicReference;
         }
     }
 
+    /**
+     * 初始化 hystrix 的初始化对象  metrics 中维护了 统计各种数据的 数据流对象
+     */
     private static HystrixCommandMetrics initMetrics(HystrixCommandMetrics fromConstructor, HystrixCommandGroupKey groupKey,
                                                      HystrixThreadPoolKey threadPoolKey, HystrixCommandKey commandKey,
                                                      HystrixCommandProperties properties) {
@@ -393,6 +420,16 @@ import java.util.concurrent.atomic.AtomicReference;
         }
     }
 
+    /**
+     * 初始化断路器对象
+     * @param enabled
+     * @param fromConstructor
+     * @param groupKey
+     * @param commandKey
+     * @param properties
+     * @param metrics
+     * @return
+     */
     private static HystrixCircuitBreaker initCircuitBreaker(boolean enabled, HystrixCircuitBreaker fromConstructor,
                                                             HystrixCommandGroupKey groupKey, HystrixCommandKey commandKey,
                                                             HystrixCommandProperties properties, HystrixCommandMetrics metrics) {
@@ -443,9 +480,11 @@ import java.util.concurrent.atomic.AtomicReference;
      * Allow the Collapser to mark this command instance as being used for a collapsed request and how many requests were collapsed.
      * 
      * @param sizeOfBatch number of commands in request batch
+     *                    当需要mark 碰撞 命令时 调用 markEvent
      */
     /* package */void markAsCollapsedCommand(HystrixCollapserKey collapserKey, int sizeOfBatch) {
         eventNotifier.markEvent(HystrixEventType.COLLAPSED, this.commandKey);
+        // 在 原有的 result 对象上 修改指定的属性 并返回新对象
         executionResult = executionResult.markCollapsed(collapserKey, sizeOfBatch);
     }
 
@@ -470,13 +509,17 @@ import java.util.concurrent.atomic.AtomicReference;
      *             via {@code Observer#onError} if invalid arguments or state were used representing a user failure, not a system failure
      * @throws IllegalStateException
      *             if invoked more than once
+     *             获取 数据源对象
      */
     public Observable<R> observe() {
         // us a ReplaySubject to buffer the eagerly subscribed-to Observable
+        // 代表 订阅者 会收到 全部数据
         ReplaySubject<R> subject = ReplaySubject.create();
         // eagerly kick off subscription
+        // 将 subject 订阅到 该command 上 (toObservable 代表本command 返回的可观察数据源)
         final Subscription sourceSubscription = toObservable().subscribe(subject);
         // return the subject that can be subscribed to later while the execution has already started
+        // 为 toObservable 多封装了一层 就是调用返回对象的 unsubscribe 会 取消sourceSubscription 的订阅
         return subject.doOnUnsubscribe(new Action0() {
             @Override
             public void call() {
@@ -485,8 +528,16 @@ import java.util.concurrent.atomic.AtomicReference;
         });
     }
 
+    /**
+     * 获取 执行时的 observable
+     * @return
+     */
     protected abstract Observable<R> getExecutionObservable();
 
+    /**
+     * 获取 回退时的 observable
+     * @return
+     */
     protected abstract Observable<R> getFallbackObservable();
 
     /**
@@ -510,6 +561,7 @@ import java.util.concurrent.atomic.AtomicReference;
      *             via {@code Observer#onError} if invalid arguments or state were used representing a user failure, not a system failure
      * @throws IllegalStateException
      *             if invoked more than once
+     *             获取观察者对象
      */
     public Observable<R> toObservable() {
         final AbstractCommand<R> _cmd = this;
@@ -2167,8 +2219,14 @@ import java.util.concurrent.atomic.AtomicReference;
         return e;
     }
 
+    /**
+     * 在 Command 对象中 没有直接使用 hook 对象而是 使用 hook的包装对象
+     */
     private static class ExecutionHookDeprecationWrapper extends HystrixCommandExecutionHook {
 
+        /**
+         * hook 内部有针对 Command 执行流程中对应触发的 切入点
+         */
         private final HystrixCommandExecutionHook actual;
 
         ExecutionHookDeprecationWrapper(HystrixCommandExecutionHook actual) {
@@ -2394,6 +2452,9 @@ import java.util.concurrent.atomic.AtomicReference;
             actual.onUnsubscribe(commandInstance);
         }
 
+        /**
+         * 在调用每个对应的 钩子方法前 执行  确保 invokable 是 HystrixCommand 对象
+         */
         @SuppressWarnings({ "unchecked", "rawtypes" })
         private <T> HystrixCommand<T> getHystrixCommandFromAbstractIfApplicable(HystrixInvokable<T> commandInstance) {
             if (commandInstance instanceof HystrixCommand) {

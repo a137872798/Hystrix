@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Timer used by {@link HystrixCommand} to timeout async executions and {@link HystrixCollapser} to trigger batch executions.
- * 熔断定时器
+ * 定时器对象
  */
 public class HystrixTimer {
 
@@ -99,6 +99,7 @@ public class HystrixTimer {
      * 返回的 监听器对象是 被 特殊引用包裹的 便于被 GC 回收
      */
     public Reference<TimerListener> addTimerListener(final TimerListener listener) {
+        // 在添加 监听器的时候 会初始化 定时器
         startThreadIfNeeded();
         // add the listener
 
@@ -114,10 +115,14 @@ public class HystrixTimer {
             }
         };
 
+        // 根据 listener. tick() 的时间间隔 来 触发 嘀嗒方法
         ScheduledFuture<?> f = executor.get().getThreadPool().scheduleAtFixedRate(r, listener.getIntervalTimeInMilliseconds(), listener.getIntervalTimeInMilliseconds(), TimeUnit.MILLISECONDS);
         return new TimerReference(listener, f);
     }
 
+    /**
+     * 为什么要使用软引用 软引用 只有在 GC 快满的时候 才会进行回收
+     */
     private static class TimerReference extends SoftReference<TimerListener> {
 
         private final ScheduledFuture<?> f;
@@ -140,7 +145,7 @@ public class HystrixTimer {
      * Since we allow resetting the timer (shutting down the thread) we need to lazily re-start it if it starts being used again.
      * <p>
      * This does the lazy initialization and start of the thread in a thread-safe manner while having little cost the rest of the time.
-     * 启动线程
+     * 在添加 监听器的时候同时启动定时器对象
      */
     protected void startThreadIfNeeded() {
         // create and start thread if one doesn't exist
@@ -157,7 +162,13 @@ public class HystrixTimer {
      * 定时器对象  封装了 JDK 原生的定时器
      */
     /* package */ static class ScheduledExecutor {
+        /**
+         * jdk 定时器对象
+         */
         /* package */ volatile ScheduledThreadPoolExecutor executor;
+        /**
+         * 是否已经启用
+         */
         private volatile boolean initialized;
 
         /**
@@ -166,6 +177,7 @@ public class HystrixTimer {
          */
         public void initialize() {
 
+            // 获取 hystrix 的属性对象
             HystrixPropertiesStrategy propertiesStrategy = HystrixPlugins.getInstance().getPropertiesStrategy();
             int coreSize = propertiesStrategy.getTimerThreadPoolProperties().getCorePoolSize().get();
 
@@ -186,6 +198,7 @@ public class HystrixTimer {
                 threadFactory = PlatformSpecific.getAppEngineThreadFactory();
             }
 
+            // 创建线程池对象
             executor = new ScheduledThreadPoolExecutor(coreSize, threadFactory);
             initialized = true;
         }
@@ -218,7 +231,7 @@ public class HystrixTimer {
 
         /**
          * How often this TimerListener should 'tick' defined in milliseconds.
-         * 获取距离下次 嘀嗒的时间间隔
+         * 获取 2个 嘀嗒间的时间间隔
          */
         public int getIntervalTimeInMilliseconds();
     }
