@@ -406,9 +406,17 @@ public class HystrixCommandMetrics extends HystrixMetrics {
         HystrixThreadEventStream.getInstance().commandExecutionStarted(commandKey, threadPoolKey, isolationStrategy, currentCount);
     }
 
+    /**
+     * 标记任务完成
+     * @param executionResult
+     * @param commandKey
+     * @param threadPoolKey
+     * @param executionStarted 代表是否正常执行了 代码 用户调用 Command 时 如果出现异常这里是false
+     */
     /* package-private */ void markCommandDone(ExecutionResult executionResult, HystrixCommandKey commandKey, HystrixThreadPoolKey threadPoolKey, boolean executionStarted) {
         HystrixThreadEventStream.getInstance().executionDone(executionResult, commandKey, threadPoolKey);
         if (executionStarted) {
+            // 减少当前执行的任务数
             concurrentExecutionCount.decrementAndGet();
         }
     }

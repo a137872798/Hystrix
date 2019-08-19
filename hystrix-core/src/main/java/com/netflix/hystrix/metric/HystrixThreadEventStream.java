@@ -51,15 +51,29 @@ import rx.subjects.Subject;
  * thread in the SEMAPHORE-isolated case, and the Hystrix thread in the THREAD-isolated case. I determined this to
  * be more efficient CPU-wise than immediately hopping off-thread and doing all the metric calculations in the
  * RxComputationThreadPool.
+ * 每个线程维护的自己的事件流
  */
 public class HystrixThreadEventStream {
+    /**
+     * 本线程id
+     */
     private final long threadId;
+    /**
+     * 本线程名
+     */
     private final String threadName;
 
+    // K, V 一致代表subject 桥接的 2个 类型是相同的
+    // HystrixCommandExecutionStarted 代表执行的线程隔离策略相关信息
     private final Subject<HystrixCommandExecutionStarted, HystrixCommandExecutionStarted> writeOnlyCommandStartSubject;
+    // HystrixCommandCompletion 维护了 executionResult
     private final Subject<HystrixCommandCompletion, HystrixCommandCompletion> writeOnlyCommandCompletionSubject;
+    // 记录 碰撞事件
     private final Subject<HystrixCollapserEvent, HystrixCollapserEvent> writeOnlyCollapserSubject;
 
+    /**
+     * 创建事件流对象
+     */
     private static final ThreadLocal<HystrixThreadEventStream> threadLocalStreams = new ThreadLocal<HystrixThreadEventStream>() {
         @Override
         protected HystrixThreadEventStream initialValue() {
@@ -67,6 +81,9 @@ public class HystrixThreadEventStream {
         }
     };
 
+    /**
+     * 当  写入command时触发 关联到 subject的下游
+     */
     private static final Action1<HystrixCommandExecutionStarted> writeCommandStartsToShardedStreams = new Action1<HystrixCommandExecutionStarted>() {
         @Override
         public void call(HystrixCommandExecutionStarted event) {
@@ -101,18 +118,28 @@ public class HystrixThreadEventStream {
         }
     };
 
+    /**
+     * 线程事件流对象  传入当前线程进行初始化
+     * @param thread
+     */
     /* package */ HystrixThreadEventStream(Thread thread) {
+        // 设置线程 id 和 线程 name
         this.threadId = thread.getId();
         this.threadName = thread.getName();
+
+        // 创建 对应的 subject 接受到 订阅后的所有数据
         writeOnlyCommandStartSubject = PublishSubject.create();
         writeOnlyCommandCompletionSubject = PublishSubject.create();
         writeOnlyCollapserSubject = PublishSubject.create();
 
+        // 开启背压 设置 onNext 事件
         writeOnlyCommandStartSubject
                 .onBackpressureBuffer()
                 .doOnNext(writeCommandStartsToShardedStreams)
+                // 推测是 非线程安全的 订阅
                 .unsafeSubscribe(Subscribers.empty());
 
+        // 该对象 用于接收 到 command 执行完后 封装的 CommandComplete 对象 并发射到下游的订阅者
         writeOnlyCommandCompletionSubject
                 .onBackpressureBuffer()
                 .doOnNext(writeCommandCompletionsToShardedStreams)
@@ -140,8 +167,16 @@ public class HystrixThreadEventStream {
         writeOnlyCommandStartSubject.onNext(event);
     }
 
+    /**
+     * 触发 代表command 执行完成
+     * @param executionResult
+     * @param commandKey
+     * @param threadPoolKey
+     */
     public void executionDone(ExecutionResult executionResult, HystrixCommandKey commandKey, HystrixThreadPoolKey threadPoolKey) {
+        // 将 result对象 对应的 2个 缓存键 以及 当前线程维护的 上下文对象 封装成 commandCompletion 对象
         HystrixCommandCompletion event = HystrixCommandCompletion.from(executionResult, commandKey, threadPoolKey);
+        // emit 元素 对象到 下游 因为该对象是 subject 可以通过手动触发onNext 它会自动将 数据发射到下游
         writeOnlyCommandCompletionSubject.onNext(event);
     }
 

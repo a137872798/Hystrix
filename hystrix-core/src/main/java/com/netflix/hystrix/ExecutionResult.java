@@ -401,6 +401,11 @@ public class ExecutionResult {
                 failedExecutionException, executionException, executionOccurred, isExecutedInThread, collapserKey);
     }
 
+    /**
+     * 标记用户本次 执行耗时
+     * @param userThreadLatency
+     * @return
+     */
     public ExecutionResult markUserThreadCompletion(long userThreadLatency) {
         if (startTimestamp > 0 && !isResponseRejected()) {
             /* execution time (must occur before terminal state otherwise a race condition can occur if requested by client) */

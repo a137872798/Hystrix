@@ -568,12 +568,15 @@ import java.util.concurrent.atomic.AtomicReference;
 
         //doOnCompleted handler already did all of the SUCCESS work
         //doOnError handler already did all of the FAILURE/TIMEOUT/REJECTION/BAD_REQUEST work
+        //该 action是在 command 执行完之后 触发的
         final Action0 terminateCommandCleanup = new Action0() {
 
             @Override
             public void call() {
+                // 如果当前创建完成 并设置成 terminal 成功 代表 一个 command 开始执行并完成
                 if (_cmd.commandState.compareAndSet(CommandState.OBSERVABLE_CHAIN_CREATED, CommandState.TERMINAL)) {
                     handleCommandEnd(false); //user code never ran
+                // 代表用户代表 执行之后设置成 完成
                 } else if (_cmd.commandState.compareAndSet(CommandState.USER_CODE_EXECUTED, CommandState.TERMINAL)) {
                     handleCommandEnd(true); //user code did run
                 }
@@ -581,11 +584,15 @@ import java.util.concurrent.atomic.AtomicReference;
         };
 
         //mark the command as CANCELLED and store the latency (in addition to standard cleanup)
+        // 取消订阅时 触发
         final Action0 unsubscribeCommandCleanup = new Action0() {
             @Override
             public void call() {
+                // 如果当前断路器是半开状态就设置成开启 否则不处理
                 circuitBreaker.markNonSuccess();
+                // 如果是从 chain 刚创建
                 if (_cmd.commandState.compareAndSet(CommandState.OBSERVABLE_CHAIN_CREATED, CommandState.UNSUBSCRIBED)) {
+                    // 判断是否 包含终止事件  这里的 终止事件 包含全部事件
                     if (!_cmd.executionResult.containsTerminalEvent()) {
                         _cmd.eventNotifier.markEvent(HystrixEventType.CANCELLED, _cmd.commandKey);
                         try {
@@ -1130,11 +1137,14 @@ import java.util.concurrent.atomic.AtomicReference;
     }
 
     private void cleanUpAfterResponseFromCache(boolean commandExecutionStarted) {
+        // 获取 定时器 监听对象
         Reference<TimerListener> tl = timeoutTimer.get();
+        // 清除引用
         if (tl != null) {
             tl.clear();
         }
 
+        // 代表本次 command 的执行时间
         final long latency = System.currentTimeMillis() - commandStartTimestamp;
         executionResult = executionResult
                 .addEvent(-1, HystrixEventType.RESPONSE_FROM_CACHE)
@@ -1146,20 +1156,28 @@ import java.util.concurrent.atomic.AtomicReference;
         eventNotifier.markEvent(HystrixEventType.RESPONSE_FROM_CACHE, commandKey);
     }
 
+    /**
+     * 代表本次 command 处理完成
+     * @param commandExecutionStarted  代表是否执行过用户代码
+     */
     private void handleCommandEnd(boolean commandExecutionStarted) {
         Reference<TimerListener> tl = timeoutTimer.get();
         if (tl != null) {
             tl.clear();
         }
 
+        // 获取本次执行时间
         long userThreadLatency = System.currentTimeMillis() - commandStartTimestamp;
         executionResult = executionResult.markUserThreadCompletion((int) userThreadLatency);
+        // 如果 关闭的 结果对象为 null
         if (executionResultAtTimeOfCancellation == null) {
+            // 标记 任务被完成  生成CommandComplete 对象 并发射到下游
             metrics.markCommandDone(executionResult, commandKey, threadPoolKey, commandExecutionStarted);
         } else {
             metrics.markCommandDone(executionResultAtTimeOfCancellation, commandKey, threadPoolKey, commandExecutionStarted);
         }
 
+        // 如果 存在command 执行完成后的 回调对象 就调用
         if (endCurrentThreadExecutingCommand != null) {
             endCurrentThreadExecutingCommand.call();
         }

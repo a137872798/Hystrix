@@ -141,7 +141,7 @@ public class HystrixCommandCompletion extends HystrixCommandEvent {
     }
 
     /**
-     * 是否出现了 did 命令
+     * 是否执行了命令
      * @return
      */
     @Override
