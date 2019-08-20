@@ -56,7 +56,7 @@ public class ExecutionResult {
      */
     private final int userThreadLatency; //time elapsed between caller thread submitting request and response being visible to it
     /**
-     * 是否出现异常
+     * 是否开始执行
      */
     private final boolean executionOccurred;
     /**
@@ -428,6 +428,12 @@ public class ExecutionResult {
                 executionOccurred, isExecutedInThread, collapserKey);
     }
 
+    /**
+     * 为 结果对象 添加指定的事件
+     * @param executionLatency
+     * @param eventType
+     * @return
+     */
     public ExecutionResult addEvent(int executionLatency, HystrixEventType eventType) {
         if (startTimestamp >= 0 && !isResponseRejected()) {
             return new ExecutionResult(eventCounts.plus(eventType), startTimestamp, executionLatency,

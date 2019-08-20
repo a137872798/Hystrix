@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * Per-Command stream of {@link HystrixCommandExecutionStarted}s.  This gets written to by {@link HystrixThreadEventStream}s.
  * Events are emitted synchronously in the same thread that performs the command execution.
- * 命令事件流
+ * 该对象 用于下发 HystrixCommandExecutionStarted
  */
 public class HystrixCommandStartStream implements HystrixEventStream<HystrixCommandExecutionStarted> {
     private final HystrixCommandKey commandKey;
@@ -82,7 +82,7 @@ public class HystrixCommandStartStream implements HystrixEventStream<HystrixComm
     }
 
     /**
-     * write 就是 将数据写入到 发布者
+     * write 就是 将数据写入到 subject ， 这个对象会进一步下发数据  外部应该是通过 observe 获取 能够订阅该发射数据的 可观察对象 进一步处理数据
      * @param event
      */
     public void write(HystrixCommandExecutionStarted event) {

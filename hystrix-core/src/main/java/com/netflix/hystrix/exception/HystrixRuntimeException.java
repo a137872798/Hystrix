@@ -21,14 +21,24 @@ import com.netflix.hystrix.util.ExceptionThreadingUtility;
 
 /**
  * RuntimeException that is thrown when a {@link HystrixCommand} fails and does not have a fallback.
+ * hystrix 封装的异常对象
  */
 @SuppressWarnings("rawtypes")
 public class HystrixRuntimeException extends RuntimeException {
 
     private static final long serialVersionUID = 5219160375476046229L;
 
+    /**
+     * 用于描述 执行 command 的类对象
+     */
     private final Class<? extends HystrixInvokable> commandClass;
+    /**
+     * 回退异常
+     */
     private final Throwable fallbackException;
+    /**
+     * 失败类型
+     */
     private final FailureType failureCause;
 
     public static enum FailureType {

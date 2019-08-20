@@ -106,14 +106,18 @@ public class Hystrix {
     /**
      * 
      * @return Action0 to perform the same work as `endCurrentThreadExecutingCommand()` but can be done from any thread
+     * 代表 某个command 开始执行时的函数对象
      */
     /* package */static Action0 startCurrentThreadExecutingCommand(HystrixCommandKey key) {
+        // 通过线程绑定的方式  返回 栈对象
         final ConcurrentStack<HystrixCommandKey> list = currentCommand.get();
         try {
+            // 将本次调用对象 入栈
             list.push(key);
         } catch (Exception e) {
             logger.warn("Unable to record command starting", e);
         }
+        // 返回一个 出栈方法
         return new Action0() {
 
             @Override
@@ -148,6 +152,7 @@ public class Hystrix {
     /**
      * Trieber's algorithm for a concurrent stack
      * @param <E>
+     *     并发栈 对象
      */
     private static class ConcurrentStack<E> {
         AtomicReference<Node<E>> top = new AtomicReference<Node<E>>();

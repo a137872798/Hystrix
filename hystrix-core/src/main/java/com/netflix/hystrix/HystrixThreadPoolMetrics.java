@@ -190,7 +190,7 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
     private final HystrixThreadPoolProperties properties;
 
     /**
-     * 当前执行的任务数
+     * 当前执行的任务数  每当线程池拒绝一个任务时 减少该计数值
      */
     private final AtomicInteger concurrentExecutionCount = new AtomicInteger();
 

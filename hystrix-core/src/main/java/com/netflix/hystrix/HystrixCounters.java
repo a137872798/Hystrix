@@ -20,8 +20,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Class with global statistics on Hystrix runtime behavior.
  * All of the data available via this class is static and scoped at the JVM level
+ * 全局 计数器
  */
 public class HystrixCounters {
+    /**
+     * 当前共有多少线程
+     */
     private static final AtomicInteger concurrentThreadsExecuting = new AtomicInteger(0);
 
     /* package-private */ static int incrementGlobalConcurrentThreads() {

@@ -401,8 +401,16 @@ public class HystrixCommandMetrics extends HystrixMetrics {
         return concurrentExecutionCount.get();
     }
 
+    /**
+     * 传入隔离策略
+     * @param commandKey
+     * @param threadPoolKey
+     * @param isolationStrategy
+     */
     /* package-private */ void markCommandStart(HystrixCommandKey commandKey, HystrixThreadPoolKey threadPoolKey, HystrixCommandProperties.ExecutionIsolationStrategy isolationStrategy) {
+        // 增加当前执行的任务数
         int currentCount = concurrentExecutionCount.incrementAndGet();
+        // 使用 eventStream 发射数据
         HystrixThreadEventStream.getInstance().commandExecutionStarted(commandKey, threadPoolKey, isolationStrategy, currentCount);
     }
 

@@ -82,16 +82,20 @@ public class HystrixThreadEventStream {
     };
 
     /**
-     * 当  写入command时触发 关联到 subject的下游
+     * 当 执行 command 时 会从上层 创建一个 HystrixCommandExecutionStarted 对象 并通过 该函数传递到下游
      */
     private static final Action1<HystrixCommandExecutionStarted> writeCommandStartsToShardedStreams = new Action1<HystrixCommandExecutionStarted>() {
         @Override
         public void call(HystrixCommandExecutionStarted event) {
             HystrixCommandStartStream commandStartStream = HystrixCommandStartStream.getInstance(event.getCommandKey());
+            // 下发数据
             commandStartStream.write(event);
 
+            // 如果是通过线程 隔离 command  如果是 信号量 这里 不再生成 ThreadPoolStartStream
             if (event.isExecutedInThread()) {
+                // 同时下发 线程相关的数据
                 HystrixThreadPoolStartStream threadPoolStartStream = HystrixThreadPoolStartStream.getInstance(event.getThreadPoolKey());
+                // 下发数据 这样 订阅 ThreadPoolStartStream 的对象 就可以 接收到 创建线程的相关数据
                 threadPoolStartStream.write(event);
             }
         }
@@ -161,9 +165,17 @@ public class HystrixThreadEventStream {
         writeOnlyCollapserSubject.onCompleted();
     }
 
+    /**
+     * 当命令开始执行时 触发
+     * @param commandKey
+     * @param threadPoolKey
+     * @param isolationStrategy
+     * @param currentConcurrency  这里还传入了 当前command 的 并发数
+     */
     public void commandExecutionStarted(HystrixCommandKey commandKey, HystrixThreadPoolKey threadPoolKey,
                                         HystrixCommandProperties.ExecutionIsolationStrategy isolationStrategy, int currentConcurrency) {
         HystrixCommandExecutionStarted event = new HystrixCommandExecutionStarted(commandKey, threadPoolKey, isolationStrategy, currentConcurrency);
+        // 将事件发送到下游
         writeOnlyCommandStartSubject.onNext(event);
     }
 

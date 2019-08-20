@@ -310,6 +310,9 @@ public interface HystrixThreadPool {
             metrics.markThreadCompletion();
         }
 
+        /**
+         * 当尝试执行某个任务时 被线程池 拒绝了 将本次拒绝信息条件到 metrics 中
+         */
         @Override
         public void markThreadRejection() {
             metrics.markThreadRejection();
