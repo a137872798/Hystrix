@@ -416,9 +416,9 @@ public class HystrixCommandMetrics extends HystrixMetrics {
 
     /**
      * 标记任务完成
-     * @param executionResult
-     * @param commandKey
-     * @param threadPoolKey
+     * @param executionResult 本次执行结果
+     * @param commandKey  对应的 command 唯一标识
+     * @param threadPoolKey  对象的线程池属性标识
      * @param executionStarted 代表是否正常执行了 代码 用户调用 Command 时 如果出现异常这里是false
      */
     /* package-private */ void markCommandDone(ExecutionResult executionResult, HystrixCommandKey commandKey, HystrixThreadPoolKey threadPoolKey, boolean executionStarted) {

@@ -335,7 +335,7 @@ import java.util.concurrent.atomic.AtomicReference;
         // 初始化 钩子对象
         this.executionHook = initExecutionHook(executionHook);
 
-        // 获取请求缓存对象
+        // 获取请求缓存对象 这里会使用 commandKey 和 策略对象生成唯一一个 reqCache 对象
         this.requestCache = HystrixRequestCache.getInstance(this.commandKey, this.concurrencyStrategy);
         // 根据 请求对象 在 执行过程中的 情况 记录 日志
         this.currentRequestLog = initRequestLog(this.properties.requestLogEnabled().get(), this.concurrencyStrategy);
@@ -661,6 +661,9 @@ import java.util.concurrent.atomic.AtomicReference;
             }
         };
 
+        /**
+         * 当任务完成时 触发的 钩子 调用 hook.success 方法
+         */
         final Action0 fireOnCompletedHook = new Action0() {
             @Override
             public void call() {
@@ -672,10 +675,14 @@ import java.util.concurrent.atomic.AtomicReference;
             }
         };
 
+        /**
+         * Observable 工厂对象
+         */
         return Observable.defer(new Func0<Observable<R>>() {
             @Override
             public Observable<R> call() {
                 /* this is a stateful object so can only be used once */
+                // 尝试构造 observable chain 失败时 直接抛出异常 BadRequest 是 不会进行回退的
                 if (!commandState.compareAndSet(CommandState.NOT_STARTED, CommandState.OBSERVABLE_CHAIN_CREATED)) {
                     IllegalStateException ex = new IllegalStateException("This instance can only be executed once. Please instantiate a new instance.");
                     //TODO make a new error type for this
@@ -684,52 +691,72 @@ import java.util.concurrent.atomic.AtomicReference;
 
                 commandStartTimestamp = System.currentTimeMillis();
 
+                // 默认情况下 会为每个请求 记录日志
                 if (properties.requestLogEnabled().get()) {
                     // log this command execution regardless of what happened
                     if (currentRequestLog != null) {
+                        // 为请求日志对象 添加 command (内部维护了 一个 队列 只允许存储多少个任务)
                         currentRequestLog.addExecutedCommand(_cmd);
                     }
                 }
 
+                // 判断是否为 req 对象做缓存  默认的 缓存键为 null
                 final boolean requestCacheEnabled = isRequestCachingEnabled();
+                // 获取缓存键对象
                 final String cacheKey = getCacheKey();
 
                 /* try from cache first */
                 if (requestCacheEnabled) {
+                    // 尝试使用缓存键 获取 响应结果
                     HystrixCommandResponseFromCache<R> fromCache = (HystrixCommandResponseFromCache<R>) requestCache.get(cacheKey);
                     if (fromCache != null) {
+                        // 存在缓存 代表要从缓存中返回结果
                         isResponseFromCache = true;
                         return handleRequestCacheHitAndEmitValues(fromCache, _cmd);
                     }
                 }
 
+                // 生成观察者数据对象的流
                 Observable<R> hystrixObservable =
                         Observable.defer(applyHystrixSemantics)
+                                // 对该对象 的行为做封装 每次调用都会触发 hook.onComplete  和 onEmit
                                 .map(wrapWithAllOnNextHooks);
 
                 Observable<R> afterCache;
 
                 // put in cache
+                // 如果允许使用缓存 这里要更新缓存对象
                 if (requestCacheEnabled && cacheKey != null) {
                     // wrap it for caching
+                    // 将 本次 command 作为一个 缓存对象 下次执行命令 如果有携带缓存键 那么执行的时候 就会使用本次 command 的数据 作为下次 的结果
                     HystrixCachedObservable<R> toCache = HystrixCachedObservable.from(hystrixObservable, _cmd);
+                    // 2个 使用相同缓存键的 command 可以 使用 cache 特性 查询到一样的数据结果
                     HystrixCommandResponseFromCache<R> fromCache = (HystrixCommandResponseFromCache<R>) requestCache.putIfAbsent(cacheKey, toCache);
+                    // 代表其他线程 已经缓存了 该 commandKey 对应的结果
                     if (fromCache != null) {
                         // another thread beat us so we'll use the cached value instead
+                        // 取消之前的数据订阅
                         toCache.unsubscribe();
+                        // 代表 结果 从其他缓存中获取
                         isResponseFromCache = true;
+                        // 使用 其他线程 抢占 并缓存的 数据结果
                         return handleRequestCacheHitAndEmitValues(fromCache, _cmd);
                     } else {
                         // we just created an ObservableCommand so we cast and return it
+                        // 返回缓存数据流 作为 被处理的 目标数据流
                         afterCache = toCache.toObservable();
                     }
                 } else {
+                    // 不允许的情况下 直接获取结果
                     afterCache = hystrixObservable;
                 }
 
                 return afterCache
+                        // 设置终止时的清理对象  也就是清除定时任务 并统计结果数据
                         .doOnTerminate(terminateCommandCleanup)     // perform cleanup once (either on normal terminal state (this line), or unsubscribe (next line))
+                        // 取消订阅时 统计数据
                         .doOnUnsubscribe(unsubscribeCommandCleanup) // perform cleanup once
+                        // 完成时 触发
                         .doOnCompleted(fireOnCompletedHook);
             }
         });
@@ -795,6 +822,10 @@ import java.util.concurrent.atomic.AtomicReference;
         }
     }
 
+    /**
+     * 是否需要统计command 的执行数据
+     * @return
+     */
     abstract protected boolean commandIsScalar();
 
     /**
@@ -901,9 +932,13 @@ import java.util.concurrent.atomic.AtomicReference;
             execution = executeCommandWithSpecifiedIsolation(_cmd);
         }
 
+        // onNext 事件  将事件 发送到下游 以及 记录数据
         return execution.doOnNext(markEmits)
+                // 设置了 需要统计数据的场景下 将 complete的数据 设置到 统计对象中
                 .doOnCompleted(markOnCompleted)
+                // 遇到异常时  不走 onError 而是尝试走这个方法  也就是判断异常是否 有回退的可能 有的话 就进行回退 否则抛出异常
                 .onErrorResumeNext(handleFallback)
+                // 针对每个请求 都要切换上下文  因为 一旦切换到其他线程就会丢失请求信息
                 .doOnEach(setRequestContext);
     }
 
@@ -1240,17 +1275,26 @@ import java.util.concurrent.atomic.AtomicReference;
                 .lift(new DeprecatedOnRunHookApplication(_cmd));
     }
 
+    /**
+     * 从缓存中获取结果对象
+     * @param fromCache
+     * @param _cmd
+     * @return
+     */
     private Observable<R> handleRequestCacheHitAndEmitValues(final HystrixCommandResponseFromCache<R> fromCache, final AbstractCommand<R> _cmd) {
         try {
+            // 触发 缓存命中方法
             executionHook.onCacheHit(this);
         } catch (Throwable hookEx) {
             logger.warn("Error calling HystrixCommandExecutionHook.onCacheHit", hookEx);
         }
 
         return fromCache.toObservableWithStateCopiedInto(this)
+                // 终结时 触发
                 .doOnTerminate(new Action0() {
                     @Override
                     public void call() {
+                        // 根据是否执行了 用户代码 执行对应的  clean 逻辑
                         if (commandState.compareAndSet(CommandState.OBSERVABLE_CHAIN_CREATED, CommandState.TERMINAL)) {
                             cleanUpAfterResponseFromCache(false); //user code never ran
                         } else if (commandState.compareAndSet(CommandState.USER_CODE_EXECUTED, CommandState.TERMINAL)) {
@@ -1261,6 +1305,7 @@ import java.util.concurrent.atomic.AtomicReference;
                 .doOnUnsubscribe(new Action0() {
                     @Override
                     public void call() {
+                        // 取消订阅时 也做清理逻辑
                         if (commandState.compareAndSet(CommandState.OBSERVABLE_CHAIN_CREATED, CommandState.UNSUBSCRIBED)) {
                             cleanUpAfterResponseFromCache(false); //user code never ran
                         } else if (commandState.compareAndSet(CommandState.USER_CODE_EXECUTED, CommandState.UNSUBSCRIBED)) {
@@ -1270,6 +1315,10 @@ import java.util.concurrent.atomic.AtomicReference;
                 });
     }
 
+    /**
+     * 当使用缓存时 任务结束 的清理工作
+     * @param commandExecutionStarted
+     */
     private void cleanUpAfterResponseFromCache(boolean commandExecutionStarted) {
         // 获取 定时器 监听对象
         Reference<TimerListener> tl = timeoutTimer.get();
@@ -1280,10 +1329,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
         // 代表本次 command 的执行时间
         final long latency = System.currentTimeMillis() - commandStartTimestamp;
+        // 设置部分属性后 返回 为什么要设置成 该 result 对象每次都会返回一个新对象 而不是在原有的基础上修改属性
         executionResult = executionResult
                 .addEvent(-1, HystrixEventType.RESPONSE_FROM_CACHE)
                 .markUserThreadCompletion(latency)
                 .setNotExecutedInThread();
+        // 该对象是 针对使用缓存的情况 作为统计数据用的
         ExecutionResult cacheOnlyForMetrics = ExecutionResult.from(HystrixEventType.RESPONSE_FROM_CACHE)
                 .markUserThreadCompletion(latency);
         metrics.markCommandDone(cacheOnlyForMetrics, commandKey, threadPoolKey, commandExecutionStarted);
@@ -1409,6 +1460,11 @@ import java.util.concurrent.atomic.AtomicReference;
         return Observable.error(toEmit);
     }
 
+    /**
+     * 处理失败 情况 这里主要是 通知监听器 和设置 result 对象 并且根据异常信息来判断是回退还是抛出异常
+     * @param underlying
+     * @return
+     */
     private Observable<R> handleFailureViaFallback(Exception underlying) {
         /**
          * All other error handling
@@ -1796,19 +1852,31 @@ import java.util.concurrent.atomic.AtomicReference;
     /* ******************************************************************************** */
     /* ******************************************************************************** */
 
+    /**
+     * 执行应用时的 hook对象
+     */
     private class ExecutionHookApplication implements Operator<R, R> {
+        /**
+         * 内部维护的 command 对象
+         */
         private final HystrixInvokable<R> cmd;
 
         ExecutionHookApplication(HystrixInvokable<R> cmd) {
             this.cmd = cmd;
         }
 
+        /**
+         * 配合 lift 函数 对传入参数 进行代理
+         * @param subscriber
+         * @return
+         */
         @Override
         public Subscriber<? super R> call(final Subscriber<? super R> subscriber) {
             return new Subscriber<R>(subscriber) {
                 @Override
                 public void onCompleted() {
                     try {
+                        // 完成前 执行对应钩子 失败 打印日志并忽视异常
                         executionHook.onExecutionSuccess(cmd);
                     } catch (Throwable hookEx) {
                         logger.warn("Error calling HystrixCommandExecutionHook.onExecutionSuccess", hookEx);
@@ -1816,6 +1884,10 @@ import java.util.concurrent.atomic.AtomicReference;
                     subscriber.onCompleted();
                 }
 
+                /**
+                 * 将异常包装后 触发钩子 并执行  onError
+                 * @param e
+                 */
                 @Override
                 public void onError(Throwable e) {
                     Exception wrappedEx = wrapWithOnExecutionErrorHook(e);
@@ -1958,6 +2030,11 @@ import java.util.concurrent.atomic.AtomicReference;
         }
     }
 
+    /**
+     * 根据需要进行包装 并执行钩子
+     * @param t
+     * @return
+     */
     private Exception wrapWithOnExecutionErrorHook(Throwable t) {
         Exception e = getExceptionFromThrowable(t);
         try {
@@ -2046,17 +2123,21 @@ import java.util.concurrent.atomic.AtomicReference;
      *
      * @param e initial exception
      * @return HystrixRuntimeException, HystrixBadRequestException or IllegalStateException
+     * 将 被包装的异常对象从 包装中剥离
      */
     protected Throwable decomposeException(Exception e) {
         if (e instanceof IllegalStateException) {
             return (IllegalStateException) e;
         }
+        // 如果是 hystrix 包装的异常
         if (e instanceof HystrixBadRequestException) {
+            // 如果 是 NotBeWrapper 异常 解除 Wrapper
             if (shouldNotBeWrapped(e.getCause())) {
                 return e.getCause();
             }
             return (HystrixBadRequestException) e;
         }
+        // 如果内部包含的对象 是 被包装对象 解除包装后返回
         if (e.getCause() instanceof HystrixBadRequestException) {
             if (shouldNotBeWrapped(e.getCause().getCause())) {
                 return e.getCause().getCause();
@@ -2249,6 +2330,7 @@ import java.util.concurrent.atomic.AtomicReference;
     }
 
     protected boolean isRequestCachingEnabled() {
+        // 默认情况下  允许使用缓存  而 缓存键为null
         return properties.requestCacheEnabled().get() && getCacheKey() != null;
     }
 
@@ -2427,6 +2509,10 @@ import java.util.concurrent.atomic.AtomicReference;
         return getCommandResult().getOrderedList();
     }
 
+    /**
+     * 获取 command 结果对象
+     * @return
+     */
     private ExecutionResult getCommandResult() {
         ExecutionResult resultToReturn;
         if (executionResultAtTimeOfCancellation == null) {

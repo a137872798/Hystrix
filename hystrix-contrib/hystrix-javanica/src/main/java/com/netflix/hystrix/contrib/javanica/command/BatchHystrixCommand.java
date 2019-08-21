@@ -31,6 +31,7 @@ import static com.netflix.hystrix.contrib.javanica.utils.CommonUtils.createArgsF
 
 /**
  * This command is used in collapser.
+ * 用于碰撞的 命令
  */
 @ThreadSafe
 public class BatchHystrixCommand extends AbstractHystrixCommand<List<Object>> {

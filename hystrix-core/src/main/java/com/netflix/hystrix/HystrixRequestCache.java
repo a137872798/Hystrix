@@ -123,6 +123,7 @@ public class HystrixRequestCache {
     // suppressing warnings because we are using a raw Future since it's in a heterogeneous ConcurrentHashMap cache
     @SuppressWarnings({ "unchecked" })
     /* package */<T> HystrixCachedObservable<T> get(String cacheKey) {
+        // 将缓存键 转换为 value 缓存键
         ValueCacheKey key = getRequestCacheKey(cacheKey);
         if (key != null) {
             // 这里首先要保证 能够通过 strategy 对象获取到 容器对象 否则抛出异常  get的时候默认会调用 init方法去初始化一个 chm 对象 这里一般是不会存在返回null 的情况
