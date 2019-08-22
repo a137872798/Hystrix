@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentMap;
  * Per-Command stream of {@link HystrixCommandCompletion}s.  This gets written to by {@link HystrixThreadEventStream}s.
  * Events are emitted synchronously in the same thread that performs the command execution.
  * 该对象 代表命令完成时的 数据流对象 HystrixEventStream 只是一个 返回 observable 的接口  代表该数据流会返回 commandComplete 对象
+ * 每个 commandComplete 对象 绑定在 一个 command 上
  */
 public class HystrixCommandCompletionStream implements HystrixEventStream<HystrixCommandCompletion> {
     /**
@@ -87,7 +88,8 @@ public class HystrixCommandCompletionStream implements HystrixEventStream<Hystri
         // publishSubject.create() 代表 释放 订阅后收到的所有数据  可以把 subject 理解为一个 bridge 或者 proxy 也就是 该类 一开始就是为了 将 某个 observable的数据处理后 转发给
         // 另一个 subscribe  (因为它自身可以作为一个 observable 而 自身的数据 又是靠接受其他的 observable 得到的)
         // ReplaySubject 对象 为什么能做到 将 一开始到最后的数据全部发送给新的订阅者  就是依靠缓存
-        // SerializedSubject 代表 串行化  实际上就是保证线程安全 先理解为类似于一种装饰器
+        // SerializedSubject 代表 串行化  实际上就是保证线程安全 先理解为类似于一种装饰器  PublishSubject.<HystrixCommandCompletion>create() 默认创建一个 空的 Observable 但是之后可以往里面发送数据
+        // 这样就会通知到下游的 订阅者  这里是从 订阅 开始 发送新的数据 而不发送旧数据
         this.writeOnlySubject = new SerializedSubject<HystrixCommandCompletion, HystrixCommandCompletion>(PublishSubject.<HystrixCommandCompletion>create());
         // 暂且理解为 该对象 只具备  subject 的 Observable 职能 就是 可以添加订阅者  不能主动修改 数据源 分发到下游的数据源应该也是由 writeOnlySubject 发出的
         this.readOnlyStream = writeOnlySubject.share();

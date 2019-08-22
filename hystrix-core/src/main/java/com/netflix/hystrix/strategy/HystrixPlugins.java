@@ -269,9 +269,11 @@ public class HystrixPlugins {
     public HystrixPropertiesStrategy getPropertiesStrategy() {
         if (propertiesFactory.get() == null) {
             // check for an implementation from Archaius first
+            // 尝试加载 属性策略对象
             Object impl = getPluginImplementation(HystrixPropertiesStrategy.class);
             if (impl == null) {
                 // nothing set via Archaius so initialize with default
+                // 既没有从动态工厂中查询到 属性策略实现类 也没有从 SPI 中加载 就使用默认的 属性策略实现类
                 propertiesFactory.compareAndSet(null, HystrixPropertiesStrategyDefault.getInstance());
                 // we don't return from here but call get() again in case of thread-race so the winner will always get returned
             } else {
@@ -389,6 +391,7 @@ public class HystrixPlugins {
         // Check Archaius for plugin class.
         // 首先尝试从系统变量中获取 plugin 的实现类
         String propertyName = "hystrix.plugin." + classSimpleName + ".implementation";
+        // 先尝试从动态工厂中寻找抽象类 默认情况 抽象工厂是从 hystrix 的配置中心获取的
         String implementingClass = dynamicProperties.getString(propertyName, null).get();
         // 存在的情况下 通过反射调用 这里获得实际类型后 要通过强转 返回接口类型
         if (implementingClass != null) {
@@ -437,6 +440,7 @@ public class HystrixPlugins {
                             hp.getClass().getCanonicalName());
             return hp;
         }
+        // 使用 动态配置工厂获取配置
         hp = HystrixArchaiusHelper.createArchaiusDynamicProperties();
         if (hp != null) {
             logSupplier.getLogger().debug("Created HystrixDynamicProperties. Using class : {}", 

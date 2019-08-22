@@ -48,6 +48,7 @@ public interface HystrixCommandGroupKey extends HystrixKey {
          *
          * @param name command group name
          * @return HystrixCommandGroup instance that is interned (cached) so a given name will always retrieve the same instance.
+         * 将传入的 name 作为 本次 commandGroup 的key
          */
         public static HystrixCommandGroupKey asKey(String name) {
            return intern.interned(name);

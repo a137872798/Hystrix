@@ -61,15 +61,15 @@ public class HystrixPropertiesFactory {
      * @param builder
      *            Pass-thru to {@link HystrixPropertiesStrategy#getCommandProperties} implementation.
      * @return {@link HystrixCommandProperties} instance
-     * 获取 command 相关的属性
+     * 获取 command 相关的属性  builder 可以为空
      */
     public static HystrixCommandProperties getCommandProperties(HystrixCommandKey key, HystrixCommandProperties.Setter builder) {
         // 获取属性策略对象 就是通过扫描 systemProp 指定的key 来找到 impl的类名 / 或者通过SPI机制
         HystrixPropertiesStrategy hystrixPropertiesStrategy = HystrixPlugins.getInstance().getPropertiesStrategy();
-        // 获取缓存键的name 属性 就是直接调用 key.name()
+        // 获取 缓存键 默认就是使用commandKey.name 属性+
         String cacheKey = hystrixPropertiesStrategy.getCommandPropertiesCacheKey(key, builder);
         if (cacheKey != null) {
-            // 尝试从缓存中获取对象
+            // 尝试从缓存中获取对象  commandProperties 是针对 本command 的属性对象
             HystrixCommandProperties properties = commandProperties.get(cacheKey);
             if (properties != null) {
                 return properties;

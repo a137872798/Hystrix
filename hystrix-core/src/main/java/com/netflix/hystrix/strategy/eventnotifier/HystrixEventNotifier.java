@@ -34,7 +34,7 @@ import com.netflix.hystrix.strategy.HystrixPlugins;
  * <p>
  * Methods are also invoked synchronously and will add to execution time of the commands so all behavior should be fast. If anything time-consuming is to be done it should be spawned asynchronously
  * onto separate worker threads.
- * hystrix 的事件通知对象
+ * hystrix 的默认事件通知对象
  */
 public abstract class HystrixEventNotifier {
 

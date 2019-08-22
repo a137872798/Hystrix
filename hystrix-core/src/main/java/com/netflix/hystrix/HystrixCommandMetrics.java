@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Used by {@link HystrixCommand} to record metrics.
- * 关于 command 的统计对象  hystrix 中很多组件 比如 熔断器 就是根据 订阅统计到的数据 来判断是否满足熔断条件
+ * 以 command 为 基本单位的统计对象 内部还维护了 更细粒度的 统计对象
  */
 public class HystrixCommandMetrics extends HystrixMetrics {
 
@@ -51,7 +51,7 @@ public class HystrixCommandMetrics extends HystrixMetrics {
     private static final HystrixEventType[] ALL_EVENT_TYPES = HystrixEventType.values();
 
     /**
-     * 将事件添加到 bucket 中  bucket 对应 Metrics 的 RollingNumber 对象 调用时机是什么 什么时候传入
+     * 第二个参数为 CommandCompletion 代表 该数据是在 某个任务执行完成时 统计的 这里的执行完成 应该是包含抛出异常的 (因为 HealthCount 也要统计失败比率)
      */
     public static final Func2<long[], HystrixCommandCompletion, long[]> appendEventToBucket = new Func2<long[], HystrixCommandCompletion, long[]>() {
 
@@ -244,10 +244,11 @@ public class HystrixCommandMetrics extends HystrixMetrics {
      * @param commandGroup  代表本command 属于哪个 commandGroup
      * @param threadPoolKey
      * @param properties
-     * @param eventNotifier
+     * @param eventNotifier 默认情况下 外部没有设置 会使用一个空的监听器对象
      */
     /* package */HystrixCommandMetrics(final HystrixCommandKey key, HystrixCommandGroupKey commandGroup, HystrixThreadPoolKey threadPoolKey, HystrixCommandProperties properties, HystrixEventNotifier eventNotifier) {
         super(null);
+        // 设置 该 统计对象 是针对 哪个 command 的
         this.key = key;
         this.group = commandGroup;
         this.threadPoolKey = threadPoolKey;

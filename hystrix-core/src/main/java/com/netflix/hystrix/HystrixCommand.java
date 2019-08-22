@@ -216,6 +216,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
          *            The {@link HystrixCommandGroupKey} is used to represent a common relationship between commands. For example, a library or team name, the system all related commands interace
          *            with,
          *            common business purpose etc.
+         *            为 Setter 对象 设置 commandGroupKey  之后创建 command 对象 会从 该 setter对象中获取需要的属性
          */
         public static Setter withGroupKey(HystrixCommandGroupKey groupKey) {
             return new Setter(groupKey);
@@ -408,7 +409,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
      *             via {@code Future.get()} in {@link ExecutionException#getCause()} if invalid arguments or state were used representing a user failure, not a system failure
      * @throws IllegalStateException
      *             if invoked more than once
-     *             返回一个 包含单个响应对象的 future
+     *             返回一个 包含单个响应对象的 future   queue 对象 还是通过 toObservable 实现  (只是 添加了阻塞 以及  阻塞获取 future 的值)
      */
     public Future<R> queue() {
         /*

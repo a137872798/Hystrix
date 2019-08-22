@@ -22,9 +22,13 @@ import com.netflix.hystrix.HystrixCommandGroupKey;
  * Sample HystrixCommand simulating one that would fetch Order objects from a remote service or database.
  * <p>
  * This fails fast with no fallback and does not use request caching.
+ * 模拟一个拉取 Order 的命令
  */
 public class GetOrderCommand extends HystrixCommand<Order> {
 
+    /**
+     * 订单号
+     */
     private final int orderId;
 
     public GetOrderCommand(int orderId) {

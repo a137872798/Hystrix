@@ -62,6 +62,7 @@ public class HystrixCommandDemo {
     public void startDemo() {
         startMetricsMonitor();
         while (true) {
+            // 模拟一个不中断的请求
             runSimulatedRequestOnThread();
         }
     }
@@ -71,8 +72,10 @@ public class HystrixCommandDemo {
 
             @Override
             public void run() {
+                // 在执行 对应的 command 之后 总是 先初始化 绑定在本线程的 上下文对象    HystrixRequestContext 对象 默认是个空对象
                 HystrixRequestContext context = HystrixRequestContext.initializeContext();
                 try {
+                    // 模拟用户 确认订单并付款的过程
                     executeSimulatedUserRequestForOrderConfirmationAndCreditCardPayment();
 
                     System.out.println("Request => " + HystrixRequestLog.getCurrentRequest().getExecutedCommandsAsString());
@@ -88,6 +91,7 @@ public class HystrixCommandDemo {
 
     public void executeSimulatedUserRequestForOrderConfirmationAndCreditCardPayment() throws InterruptedException, ExecutionException {
         /* fetch user object with http cookies */
+        // hystrix 的使用方式 就是针对 每个 跨服务请求 都是用 command 对象进行包裹 这样就能实现隔离 不会因为某个请求延时  导致其他请求 被拖垮
         UserAccount user = new GetUserAccountCommand(new HttpCookie("mockKey", "mockValueFromHttpRequest")).execute();
 
         /* fetch the payment information (asynchronously) for the user so the credit card payment can proceed */
@@ -123,6 +127,7 @@ public class HystrixCommandDemo {
                     }
 
                     // we are using default names so can use class.getSimpleName() to derive the keys
+                    // 开启统计  通过传入指定的 commandKey  一开始 在 metrics 对象中 还不存在  (使用 getInstance(commandKey) 尝试获取 没有的话是不会创建对象的)
                     HystrixCommandMetrics creditCardMetrics = HystrixCommandMetrics.getInstance(HystrixCommandKey.Factory.asKey(CreditCardCommand.class.getSimpleName()));
                     HystrixCommandMetrics orderMetrics = HystrixCommandMetrics.getInstance(HystrixCommandKey.Factory.asKey(GetOrderCommand.class.getSimpleName()));
                     HystrixCommandMetrics userAccountMetrics = HystrixCommandMetrics.getInstance(HystrixCommandKey.Factory.asKey(GetUserAccountCommand.class.getSimpleName()));
@@ -143,6 +148,7 @@ public class HystrixCommandDemo {
 
             private String getStatsStringFromMetrics(HystrixCommandMetrics metrics) {
                 StringBuilder m = new StringBuilder();
+                // 当存在 测量对象后  因为 如果command 没有初始化  对应的 metrics 对象是不会被设置的 
                 if (metrics != null) {
                     HealthCounts health = metrics.getHealthCounts();
                     m.append("Requests: ").append(health.getTotalRequests()).append(" ");

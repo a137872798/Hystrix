@@ -24,6 +24,7 @@ import com.netflix.hystrix.HystrixCommandGroupKey;
  * Sample HystrixCommand simulating one that would fetch UserAccount objects from a remote service or database.
  * <p>
  * This uses request caching and fallback behavior.
+ * 模拟的是一个 用户请求获取 自身账号信息的命令
  */
 public class GetUserAccountCommand extends HystrixCommand<UserAccount> {
 
@@ -37,6 +38,7 @@ public class GetUserAccountCommand extends HystrixCommand<UserAccount> {
      *             if cookie is invalid meaning the user is not authenticated
      */
     public GetUserAccountCommand(HttpCookie cookie) {
+        // 使用 User 作为本次 调用的 commandGroupKey  通过允许从cache 中 获取resp的方式 可以避免重复的调用
         super(Setter.withGroupKey(HystrixCommandGroupKey.Factory.asKey("User")));
         this.httpCookie = cookie;
         /* parse or throw an IllegalArgumentException */

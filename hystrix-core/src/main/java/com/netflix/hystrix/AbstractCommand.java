@@ -311,9 +311,9 @@ import java.util.concurrent.atomic.AtomicReference;
                               HystrixCommandMetrics metrics, TryableSemaphore fallbackSemaphore, TryableSemaphore executionSemaphore,
                               HystrixPropertiesStrategy propertiesStrategy, HystrixCommandExecutionHook executionHook) {
 
-        // 非空校验
+        // 非空校验  commandGroupKey 是不能为空的
         this.commandGroup = initGroupKey(group);
-        // 如果 key 为空使用 className 作为缓存命令键名
+        // 如果 key 为空使用 className 作为缓存命令键名   那么单个command 执行多次 会使用相同的 commandKey
         this.commandKey = initCommandKey(key, getClass());
         // 如果 prop 为空 使用 commandPropertiesDefaults 去初始化一个新对象
         this.properties = initCommandProperties(this.commandKey, propertiesStrategy, commandPropertiesDefaults);
@@ -370,17 +370,19 @@ import java.util.concurrent.atomic.AtomicReference;
     }
 
     /**
-     * 获取属性对象
-     * @param commandKey
-     * @param propertiesStrategy
-     * @param commandPropertiesDefaults
+     * 获取属性对象  用户创建比较简单的 command 对象时 就是 只设置一个 commandKey
+     * @param commandKey  notnull
+     * @param propertiesStrategy  nullable
+     * @param commandPropertiesDefaults  nullable
      * @return
      */
     private static HystrixCommandProperties initCommandProperties(HystrixCommandKey commandKey, HystrixPropertiesStrategy propertiesStrategy, HystrixCommandProperties.Setter commandPropertiesDefaults) {
+        // 如果没有设置 hystrix 的 属性对象 就使用 commandKey 去初始化一个新的
         if (propertiesStrategy == null) {
             return HystrixPropertiesFactory.getCommandProperties(commandKey, commandPropertiesDefaults);
         } else {
             // used for unit testing
+            // 这里代表 使用 commandPropertiesDefaults 中的部分属性去 替换 propertiesStrategy
             return propertiesStrategy.getCommandProperties(commandKey, commandPropertiesDefaults);
         }
     }
@@ -393,6 +395,7 @@ import java.util.concurrent.atomic.AtomicReference;
      * It uses the HystrixThreadPoolKey if provided, then defaults to use HystrixCommandGroup.
      *
      * It can then be overridden by a property if defined so it can be changed at runtime.
+     * 初始化 线程池 Key  默认情况下 线程池 Key 是不用被重写的
      */
     private static HystrixThreadPoolKey initThreadPoolKey(HystrixThreadPoolKey threadPoolKey, HystrixCommandGroupKey groupKey, String threadPoolKeyOverride) {
         if (threadPoolKeyOverride == null) {
@@ -410,7 +413,7 @@ import java.util.concurrent.atomic.AtomicReference;
     }
 
     /**
-     * 初始化 hystrix 的初始化对象  metrics 中维护了 统计各种数据的 数据流对象
+     * 初始化 hystrix 的初始化对象  metrics 中维护了 统计各种数据的 数据流对象  fromConstructor 代表在 构造command 时 有没有传入 执行的 metrics 对象
      */
     private static HystrixCommandMetrics initMetrics(HystrixCommandMetrics fromConstructor, HystrixCommandGroupKey groupKey,
                                                      HystrixThreadPoolKey threadPoolKey, HystrixCommandKey commandKey,
@@ -511,7 +514,7 @@ import java.util.concurrent.atomic.AtomicReference;
      *             via {@code Observer#onError} if invalid arguments or state were used representing a user failure, not a system failure
      * @throws IllegalStateException
      *             if invoked more than once
-     *             获取 数据源对象
+     *             获取 数据源对象  这里返回的 是一个 hot 数据源
      */
     public Observable<R> observe() {
         // us a ReplaySubject to buffer the eagerly subscribed-to Observable
@@ -563,7 +566,7 @@ import java.util.concurrent.atomic.AtomicReference;
      *             via {@code Observer#onError} if invalid arguments or state were used representing a user failure, not a system failure
      * @throws IllegalStateException
      *             if invoked more than once
-     *             获取观察者对象
+     *             获取观察者对象  这里返回的是一个 cold 对象
      */
     public Observable<R> toObservable() {
         final AbstractCommand<R> _cmd = this;
