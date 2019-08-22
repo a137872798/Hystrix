@@ -57,6 +57,13 @@ public class RollingThreadPoolEventCounterStream extends BucketedRollingCounterS
         return getInstance(threadPoolKey, numCounterBuckets, counterBucketSizeInMs);
     }
 
+    /**
+     * 创建 线程池相关的 计数流
+     * @param threadPoolKey
+     * @param numBuckets
+     * @param bucketSizeInMs
+     * @return
+     */
     public static RollingThreadPoolEventCounterStream getInstance(HystrixThreadPoolKey threadPoolKey, int numBuckets, int bucketSizeInMs) {
         RollingThreadPoolEventCounterStream initialStream = streams.get(threadPoolKey.name());
         if (initialStream != null) {
@@ -85,6 +92,7 @@ public class RollingThreadPoolEventCounterStream extends BucketedRollingCounterS
     private RollingThreadPoolEventCounterStream(HystrixThreadPoolKey threadPoolKey, int numCounterBuckets, int counterBucketSizeInMs,
                                                 Func2<long[], HystrixCommandCompletion, long[]> reduceCommandCompletion,
                                                 Func2<long[], long[], long[]> reduceBucket) {
+        // 初始化 线程池 计数流 数据源是 HystrixThreadPoolCompletionStream 数据源头层面实现都是一样的 只是解耦了 在不同的实际往不同的subject 发射数据
         super(HystrixThreadPoolCompletionStream.getInstance(threadPoolKey), numCounterBuckets, counterBucketSizeInMs, reduceCommandCompletion, reduceBucket);
     }
 

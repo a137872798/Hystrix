@@ -43,7 +43,7 @@ public abstract class BucketedCumulativeCounterStream<Event extends HystrixEvent
     private final AtomicBoolean isSourceCurrentlySubscribed = new AtomicBoolean(false);
 
     /**
-     * 通过一些 函数对象来初始化 数据流
+     * 通过一些 函数对象来初始化 数据流  到这里 跟 roll 的数据流有所区别 上层 还是跟 roll 一样 那么这里获取到的就是以 bucket 为单位的数据流
      * @param stream  事件源数据流
      * @param numBuckets  bucket 数量
      * @param bucketSizeInMs   每多少时间更换一个桶
@@ -55,11 +55,13 @@ public abstract class BucketedCumulativeCounterStream<Event extends HystrixEvent
                                               Func2<Output, Bucket, Output> reduceBucket) {
         super(stream, numBuckets, bucketSizeInMs, reduceCommandCompletion);
 
-        // bucket source 是 通过 的defer 生成的 observable 对象
+        // 总结就是 该对象 会接受上层 每 bucket 个时间下发的bucket 对象并且将上层添加的 无效的 numbucket 空桶去掉
+
+        // bucketedStream 是上层返回的 每个元素 代表一个 bucket 的数据流 且前面 有 numBucket 大小的空桶
         this.sourceStream = bucketedStream
-                // 每连续的 2个对象 使用一个函数处理后返回  getEmptyOutputValue() 代表初始值 reduceBucket 代表累加的逻辑
+                // 这里没有 使用 window 按照 numbucket 数量进行划分 而是直接将所有 bucket 数据 累加
                 .scan(getEmptyOutputValue(), reduceBucket)
-                // 跳过前几个元素
+                // 跳过前几个元素  因为前面几个 bucket 是 空的 所以没必要获取
                 .skip(numBuckets)
                 // 当被订阅时触发
                 .doOnSubscribe(new Action0() {
@@ -75,7 +77,7 @@ public abstract class BucketedCumulativeCounterStream<Event extends HystrixEvent
                         isSourceCurrentlySubscribed.set(false);
                     }
                 })
-                // 代表多个 subscribe 会收到相同的数据
+                // 代表多个 subscribe 会共享一个 observable 现在还不知道什么用
                 .share()                        //multiple subscribers should get same data
                 // 如果消耗速度缓慢 丢弃数据 也就是背压
                 .onBackpressureDrop();          //if there are slow consumers, data should not buffer

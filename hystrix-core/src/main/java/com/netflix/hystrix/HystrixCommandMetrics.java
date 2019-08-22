@@ -256,11 +256,16 @@ public class HystrixCommandMetrics extends HystrixMetrics {
 
         // 初始化健康流数据对象
         healthCountsStream = HealthCountsStream.getInstance(key, properties);
+        // 开始初始化 针对 command 事件计数流的 画卷对象  基本流程都和上面一样 只有 生成画卷使用的 叠加 bucket 的函数不同 就是 exception 也要计数
         rollingCommandEventCounterStream = RollingCommandEventCounterStream.getInstance(key, properties);
+        // 使用累加的 数据流 上游 每过一个bucket 的 时间 就会往下游 发送一个 bucket 大小的数据量
         cumulativeCommandEventCounterStream = CumulativeCommandEventCounterStream.getInstance(key, properties);
 
+        // 延迟分发 的 数据流对象 柱形图相关的先不看
         rollingCommandLatencyDistributionStream = RollingCommandLatencyDistributionStream.getInstance(key, properties);
         rollingCommandUserLatencyDistributionStream = RollingCommandUserLatencyDistributionStream.getInstance(key, properties);
+
+        // 并发的数据流
         rollingCommandMaxConcurrencyStream = RollingCommandMaxConcurrencyStream.getInstance(key, properties);
     }
 

@@ -49,6 +49,9 @@ import java.util.concurrent.ConcurrentMap;
 public class RollingCommandLatencyDistributionStream extends RollingDistributionStream<HystrixCommandCompletion> {
     private static final ConcurrentMap<String, RollingCommandLatencyDistributionStream> streams = new ConcurrentHashMap<String, RollingCommandLatencyDistributionStream>();
 
+    /**
+     * 该函数代表 如何从 hystrix的 commandComplete 中将数据叠加到 柱形图上
+     */
     private static final Func2<Histogram, HystrixCommandCompletion, Histogram> addValuesToBucket = new Func2<Histogram, HystrixCommandCompletion, Histogram>() {
         @Override
         public Histogram call(Histogram initialDistribution, HystrixCommandCompletion event) {

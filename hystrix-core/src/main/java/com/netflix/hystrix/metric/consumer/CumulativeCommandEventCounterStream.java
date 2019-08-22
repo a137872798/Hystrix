@@ -48,7 +48,7 @@ public class CumulativeCommandEventCounterStream extends BucketedCumulativeCount
     private static final int NUM_EVENT_TYPES = HystrixEventType.values().length;
 
     /**
-     * 初始化的 逻辑基本都一致
+     * 初始化的 逻辑基本都一致  这里的 参数 跟 RollingCommandEventCounterStream 一样
      */
     public static CumulativeCommandEventCounterStream getInstance(HystrixCommandKey commandKey, HystrixCommandProperties properties) {
         final int counterMetricWindow = properties.metricsRollingStatisticalWindowInMilliseconds().get();

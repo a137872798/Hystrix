@@ -321,9 +321,9 @@ import java.util.concurrent.atomic.AtomicReference;
         this.threadPoolKey = initThreadPoolKey(threadPoolKey, this.commandGroup, this.properties.executionIsolationThreadPoolKeyOverride().get());
         // 初始化 测量对象
         this.metrics = initMetrics(metrics, this.commandGroup, this.threadPoolKey, this.commandKey, this.properties);
-        // 初始化 熔断器对象
+        // 初始化 熔断器对象  默认开启   并且会需要metrics 中的 HealthStrem 对象 通过每 roll 的数据请求成功率来判断是否开启熔断器
         this.circuitBreaker = initCircuitBreaker(this.properties.circuitBreakerEnabled().get(), circuitBreaker, this.commandGroup, this.commandKey, this.properties, this.metrics);
-        // 初始化线程池对象
+        // 初始化线程池对象 用户可以自定义
         this.threadPool = initThreadPool(threadPool, this.threadPoolKey, threadPoolPropertiesDefaults);
 
         //Strategies from plugins
@@ -335,9 +335,9 @@ import java.util.concurrent.atomic.AtomicReference;
         // 初始化 钩子对象
         this.executionHook = initExecutionHook(executionHook);
 
-        // 获取请求缓存对象 这里会使用 commandKey 和 策略对象生成唯一一个 reqCache 对象
+        // 针对请求 的 缓存对象 这里要确保 concurrencyStrategy 是一致的
         this.requestCache = HystrixRequestCache.getInstance(this.commandKey, this.concurrencyStrategy);
-        // 根据 请求对象 在 执行过程中的 情况 记录 日志
+        // 根据 请求对象 在 执行过程中的 情况 记录 日志 默认打开
         this.currentRequestLog = initRequestLog(this.properties.requestLogEnabled().get(), this.concurrencyStrategy);
 
         /* fallback semaphore override if applicable */
@@ -450,6 +450,11 @@ import java.util.concurrent.atomic.AtomicReference;
         }
     }
 
+    /**
+     * 执行钩子也是由用户实现的 可以在指定生命周期执行对应的 处理
+     * @param fromConstructor
+     * @return
+     */
     private static HystrixCommandExecutionHook initExecutionHook(HystrixCommandExecutionHook fromConstructor) {
         if (fromConstructor == null) {
             return new ExecutionHookDeprecationWrapper(HystrixPlugins.getInstance().getCommandExecutionHook());

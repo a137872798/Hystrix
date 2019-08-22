@@ -105,15 +105,15 @@ public abstract class RollingConcurrencyStream {
                 .observe()
                 // 从观察对象中 获取 当前并发数
                 .map(getConcurrencyCountFromEvent)
-                // 按照bucket 对应的 时间容量 返回不同时间的 Observable 对象
+                // 将 数据流 转换成 以 一个bucket 大小为单位的 数据流对象
                 .window(bucketSizeInMs, TimeUnit.MILLISECONDS)
-                // 返回 最大值  也就是 按照每个 bucket的时间来将 当中并发数最大的那个
+                // 返回 最大值  也就是 按照每个 bucket的时间来将多个下发数据当中并发数最大的那个  因为 初始值为0 其实就是获取每个 bucket 的 并发数
                 .flatMap(reduceStreamToMax)
-                // 在 头部插入指定的数据
+                // 在 头部插入指定的数据  这里应该是为了填充把
                 .startWith(emptyRollingMaxBuckets)
-                // 每经过一个 元素 就创建一个新的 Observable 对象 每个对象 包含 numBuckets 个 桶对象
+                // 创建 多个 画卷对象
                 .window(numBuckets, 1)
-                // 返回最大值
+                // 以画卷为单位 从多个桶中找到 最高的并发数 随着 画卷的移动 会变成 |0|0|0|x|...  -> |0|0|1|x|... -> |0|1|1|x|...  1 代表有数据 
                 .flatMap(reduceStreamToMax)
                 // 开启广播
                 .share()

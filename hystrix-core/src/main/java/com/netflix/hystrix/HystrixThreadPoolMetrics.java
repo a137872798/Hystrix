@@ -220,9 +220,11 @@ public class HystrixThreadPoolMetrics extends HystrixMetrics {
         this.threadPool = threadPool;
         this.properties = properties;
 
-        // 调用静态方法 并生成对应的 数据流对象
+        // 调用静态方法 并生成对应的 数据流对象  以画卷为单位
         rollingCounterStream = RollingThreadPoolEventCounterStream.getInstance(threadPoolKey, properties);
+        // 以 bucket 为单位
         cumulativeCounterStream = CumulativeThreadPoolEventCounterStream.getInstance(threadPoolKey, properties);
+        // 以 roll 为单位(实际 还是一个bucket 只是填充了 bucket) 获取 最大的 并发值  也就是说 该统计的 意义是 最近的一段时间内的最大并发数
         rollingThreadPoolMaxConcurrencyStream = RollingThreadPoolMaxConcurrencyStream.getInstance(threadPoolKey, properties);
     }
 

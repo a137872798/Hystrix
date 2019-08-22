@@ -210,7 +210,7 @@ public interface HystrixCircuitBreaker {
         }
 
         /**
-         * 生成订阅者 对象
+         * 生成订阅者 对象  用于 订阅 metrics 对象 获取 commandComplete/commandStart/.. 事件发出的数据 或者
          * @return
          */
         private Subscription subscribeToStream() {
@@ -219,7 +219,7 @@ public interface HystrixCircuitBreaker {
              * metrics 内部 维护了 各种 数据流 (基于rxjava 的observable 对象)  这里 获取到需要观察的流 并根据 成功 次数 等 判断是否要 熔断
              */
             return metrics.getHealthCountsStream()
-                    // 这时 获取到的observe 是 已经将 bucket 流处理过了 (已经开启了 多播和背压)
+                    // 获取健康计数的 数据流 该数据以 一个 roll 为单位
                     .observe()
                     // 设置订阅者对象
                     .subscribe(new Subscriber<HealthCounts>() {
@@ -234,7 +234,7 @@ public interface HystrixCircuitBreaker {
                         }
 
                         /**
-                         * 处理收到的 stream 中的数据
+                         * 处理收到的 stream 中的数据  HealthCountsStream 将每个bucket 内数据 累加到 HealthCounts 上  每当累计满一个  roll 的数据后 会触发onNext
                          * @param hc
                          */
                         @Override
@@ -257,7 +257,7 @@ public interface HystrixCircuitBreaker {
                                     // if it was open, we need to wait for sleep window to elapse
                                 } else {
                                     // our failure rate is too high, we need to set the state to OPEN
-                                    // 开启熔断器
+                                    // 开启熔断器 这里如果 是半开状态 无视收到的数据
                                     if (status.compareAndSet(Status.CLOSED, Status.OPEN)) {
                                         // 设置熔断器触发时间
                                         circuitOpened.set(System.currentTimeMillis());

@@ -78,6 +78,7 @@ public class RollingCommandMaxConcurrencyStream extends RollingConcurrencyStream
      * @param bucketSizeInMs
      */
     private RollingCommandMaxConcurrencyStream(final HystrixCommandKey commandKey, final int numBuckets, final int bucketSizeInMs) {
+        // 注意这里使用的 是 HystrixCommandStartStream  而不是 commandComplete
         super(HystrixCommandStartStream.getInstance(commandKey), numBuckets, bucketSizeInMs);
     }
 }

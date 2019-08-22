@@ -218,7 +218,7 @@ public interface HystrixThreadPool {
         public HystrixThreadPoolDefault(HystrixThreadPoolKey threadPoolKey, HystrixThreadPoolProperties.Setter propertiesDefaults) {
             // 传入 key 和  默认属性对象来生成一个新的 配置对象
             this.properties = HystrixPropertiesFactory.getThreadPoolProperties(threadPoolKey, propertiesDefaults);
-            // 获取并发策略对象 也是 获取实现类对象 返回的对象 都是 以 Default 结尾的 没有任何追加功能 就是为了方便用户拓展
+            // 获取并发策略对象 也是 默认情况下 使用 Default 内部 维护了 线程池的 基本属性 也可以通过SPI 或者设置 实现类到配置中心的方式进行自定义
             HystrixConcurrencyStrategy concurrencyStrategy = HystrixPlugins.getInstance().getConcurrencyStrategy();
             // 从属性中 获取 线程池 队列长度
             this.queueSize = properties.maxQueueSize().get();
@@ -232,7 +232,7 @@ public interface HystrixThreadPool {
             this.queue = this.threadPool.getQueue();
 
             /* strategy: HystrixMetricsPublisherThreadPool */
-            // 这里会初始化 线程池数据发布者对象
+            // 这里会初始化 线程池数据发布者对象  默认使用 HystrixMetricsPublisherThreadPoolDefault 也就是不做任何操作
             HystrixMetricsPublisherFactory.createOrRetrievePublisherForThreadPool(threadPoolKey, this.metrics, this.properties);
         }
 
