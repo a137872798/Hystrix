@@ -310,6 +310,9 @@ public interface HystrixThreadPool {
             metrics.markThreadCompletion();
         }
 
+        /**
+         * 当尝试执行某个任务时 被线程池 拒绝了 将本次拒绝信息条件到 metrics 中
+         */
         @Override
         public void markThreadRejection() {
             metrics.markThreadRejection();
@@ -328,11 +331,13 @@ public interface HystrixThreadPool {
          */
         @Override
         public boolean isQueueSpaceAvailable() {
+            // 这里的意思应该是 队列长度过小 使用线程池 本身的 拒绝策略
             if (queueSize <= 0) {
                 // we don't have a queue so we won't look for space but instead
                 // let the thread-pool reject or not
                 return true;
             } else {
+                // 这里才有 需要添加额外判断逻辑的必要 也就是 熔断有一个 队列长度要求  小于这个值 就不准备接受请求
                 return threadPool.getQueue().size() < properties.queueSizeRejectionThreshold().get();
             }
         }

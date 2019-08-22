@@ -37,7 +37,7 @@ import java.util.concurrent.ConcurrentMap;
  * These values are stable - there's no peeking into a bucket until it is emitted
  *
  * These values get produced and cached in this class.  This value (the latest observed value) may be queried using {@link #getLatest()}.
- * 健康计数 流对象  熔断器会订阅 该对象 便于 判断 是否满足被熔断条件
+ * 健康计数 流对象  熔断器会订阅 该对象 便于 判断 是否满足被熔断条件  该对象是 针对 画卷级别的数据统计对象
  */
 public class HealthCountsStream extends BucketedRollingCounterStream<HystrixCommandCompletion, long[], HystrixCommandMetrics.HealthCounts> {
 
@@ -64,7 +64,7 @@ public class HealthCountsStream extends BucketedRollingCounterStream<HystrixComm
 
 
     /**
-     * 尝试从缓存中获取对象信息
+     * 尝试从缓存中获取对象信息  因为 每个 command 始终对应同一个 HealthCountsStream 所以数据都会 统计到 同一个对象中 这样就可以反映为 针对某个 command 长期调用的数据统计
      * @param commandKey
      * @param properties
      * @return
@@ -79,7 +79,7 @@ public class HealthCountsStream extends BucketedRollingCounterStream<HystrixComm
             throw new RuntimeException("You have set the bucket size to 0ms.  Please set a positive number, so that the metric stream can be properly consumed");
         }
         // 统计数据的 窗口大小 (这里 将 millisecond 看作是 容量) / 每个桶的容量 (时间)  得到的就是桶数
-        // 看来统计窗口代表 是一个比 bucket 更高的 统计单位 由多个bucket 大的数据组成
+        // roll 代表画卷 也就是 总计会 维护多少个 桶的数据 超过的数据就不再维护了  默认一个 roll 中存在 20 个 bucket
         final int numHealthCountBuckets = properties.metricsRollingStatisticalWindowInMilliseconds().get() / healthCountBucketSizeInMs;
 
         // 获取单例对象

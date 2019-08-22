@@ -58,6 +58,8 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
      *            <p>
      *            The {@link HystrixCommandGroupKey} is used to represent a common relationship between commands. For example, a library or team name, the system all related commands interact with,
      *            common business purpose etc.
+     *            只是用 commandGroupKey 来初始化对象  当commandKey 为 null 的时候 会使用当前类名 作为 缓存名
+     *            如果 threadPoolKey 没有设置的话 使用 commandGroupKey 作为线程池的缓存键
      */
     protected HystrixCommand(HystrixCommandGroupKey group) {
         super(group, null, null, null, null, null, null, null, null, null, null, null);
@@ -129,6 +131,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
      * 
      * @param setter
      *            Fluent interface for constructor arguments
+     *            使用 setter 对象进行初始化
      */
     protected HystrixCommand(Setter setter) {
         // use 'null' to specify use the default
@@ -161,13 +164,29 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
      * } </pre>
      * 
      * @NotThreadSafe
+     * 该对象维护了生成 Command 对象需要的全部对象
      */
     final public static class Setter {
 
+        /**
+         * commandGroupKey
+         */
         protected final HystrixCommandGroupKey groupKey;
+        /**
+         * commandKey
+         */
         protected HystrixCommandKey commandKey;
+        /**
+         * 线程池 Key
+         */
         protected HystrixThreadPoolKey threadPoolKey;
+        /**
+         * 提供构建 command 需要的属性的set 对象
+         */
         protected HystrixCommandProperties.Setter commandPropertiesDefaults;
+        /**
+         * 线程池相关的 set
+         */
         protected HystrixThreadPoolProperties.Setter threadPoolPropertiesDefaults;
 
         /**
@@ -197,6 +216,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
          *            The {@link HystrixCommandGroupKey} is used to represent a common relationship between commands. For example, a library or team name, the system all related commands interace
          *            with,
          *            common business purpose etc.
+         *            为 Setter 对象 设置 commandGroupKey  之后创建 command 对象 会从 该 setter对象中获取需要的属性
          */
         public static Setter withGroupKey(HystrixCommandGroupKey groupKey) {
             return new Setter(groupKey);
@@ -264,7 +284,13 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
 
     }
 
+    /**
+     * 执行命令的线程对象
+     */
 	private final AtomicReference<Thread> executionThread = new AtomicReference<Thread>();
+    /**
+     * 代表 future 对象是否被打断  看来针对熔断器执行的command 用户应该是 操作 future 对象
+     */
 	private final AtomicBoolean interruptOnFutureCancel = new AtomicBoolean(false);
 
 	/**
@@ -273,6 +299,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
      * @return R response type
      * @throws Exception
      *             if command execution fails
+     *             执行 command
      */
     protected abstract R run() throws Exception;
 
@@ -289,22 +316,30 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
      * DEFAULT BEHAVIOR: It throws UnsupportedOperationException.
      * 
      * @return R or throw UnsupportedOperationException if not implemented
+     * 设置 回退逻辑 ???
      */
     protected R getFallback() {
         throw new UnsupportedOperationException("No fallback available.");
     }
 
+    /**
+     * 获取执行过程中的 可观察对象
+     * @return
+     */
     @Override
     final protected Observable<R> getExecutionObservable() {
+        // 创建 Observable 工厂
         return Observable.defer(new Func0<Observable<R>>() {
             @Override
             public Observable<R> call() {
                 try {
+                    // 返回调用run 的 对象
                     return Observable.just(run());
                 } catch (Throwable ex) {
                     return Observable.error(ex);
                 }
             }
+        // 每个订阅的对象 会设置 自己的执行线程
         }).doOnSubscribe(new Action0() {
             @Override
             public void call() {
@@ -314,6 +349,10 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
         });
     }
 
+    /**
+     * 获得回退的 观察者对象
+     * @return
+     */
     @Override
     final protected Observable<R> getFallbackObservable() {
         return Observable.defer(new Func0<Observable<R>>() {
@@ -370,24 +409,28 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
      *             via {@code Future.get()} in {@link ExecutionException#getCause()} if invalid arguments or state were used representing a user failure, not a system failure
      * @throws IllegalStateException
      *             if invoked more than once
-     *             返回一个 包含单个响应对象的 future
+     *             返回一个 包含单个响应对象的 future   queue 对象 还是通过 toObservable 实现  (只是 添加了阻塞 以及  阻塞获取 future 的值)
      */
     public Future<R> queue() {
         /*
          * The Future returned by Observable.toBlocking().toFuture() does not implement the
          * interruption of the execution thread when the "mayInterrupt" flag of Future.cancel(boolean) is set to true;
          * thus, to comply with the contract of Future, we must wrap around it.
+         * 获取 具备 hystrix 熔断功能的 observable 对象 并转换成一个 future 对象
          */
         final Future<R> delegate = toObservable().toBlocking().toFuture();
-    	
+
+        // 创建 结果对象
         final Future<R> f = new Future<R>() {
 
             @Override
             public boolean cancel(boolean mayInterruptIfRunning) {
+                // 代理对象已经被关闭的 情况 返回false
                 if (delegate.isCancelled()) {
                     return false;
                 }
 
+                // 判断是否要 打断线程
                 if (HystrixCommand.this.getProperties().executionIsolationThreadInterruptOnFutureCancel().get()) {
                     /*
                      * The only valid transition here is false -> true. If there are two futures, say f1 and f2, created by this command
@@ -399,9 +442,12 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
                     interruptOnFutureCancel.compareAndSet(false, mayInterruptIfRunning);
         		}
 
+                // 关闭future 对象
                 final boolean res = delegate.cancel(interruptOnFutureCancel.get());
 
+                // 未完成 且 中断线程
                 if (!isExecutionComplete() && interruptOnFutureCancel.get()) {
+                    // 打断线程
                     final Thread t = executionThread.get();
                     if (t != null && !t.equals(Thread.currentThread())) {
                         t.interrupt();
@@ -434,14 +480,19 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
         };
 
         /* special handling of error states that throw immediately */
+        // 判断任务是否已经完成 没有完成就返回未完成的对象
         if (f.isDone()) {
             try {
+                // 触发 get() 逻辑
                 f.get();
+                // 返回future 对象
                 return f;
             } catch (Exception e) {
+                // 将 异常 剥离出来
                 Throwable t = decomposeException(e);
                 if (t instanceof HystrixBadRequestException) {
                     return f;
+                    // 如果是运行时异常
                 } else if (t instanceof HystrixRuntimeException) {
                     HystrixRuntimeException hre = (HystrixRuntimeException) t;
                     switch (hre.getFailureType()) {
@@ -449,6 +500,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
 					case TIMEOUT:
 						// we don't throw these types from queue() only from queue().get() as they are execution errors
 						return f;
+						// 非超时 和 执行异常 选择抛出
 					default:
 						// these are errors we throw from queue() as they as rejection type errors
 						throw hre;
@@ -462,29 +514,45 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
         return f;
     }
 
+    /**
+     * 默认的 回退方法名 应该是在 command 的实现类 中 会选择 指定的 方法作为 fallback 的触发方法
+     * @return
+     */
     @Override
     protected String getFallbackMethodName() {
         return "getFallback";
     }
 
+    /**
+     * 是否由用户定义了 回退方法
+     * @return
+     */
     @Override
     protected boolean isFallbackUserDefined() {
+        // 尝试从全局容器中获取
         Boolean containsFromMap = commandContainsFallback.get(commandKey);
         if (containsFromMap != null) {
             return containsFromMap;
         } else {
+            // 没有 缓存
             Boolean toInsertIntoMap;
             try {
+                // 获取本 command 的 getFallback 方法  没有抛出异常 代表存在该方法
                 getClass().getDeclaredMethod("getFallback");
                 toInsertIntoMap = true;
             } catch (NoSuchMethodException nsme) {
                 toInsertIntoMap = false;
             }
+            // 添加到 缓存中
             commandContainsFallback.put(commandKey, toInsertIntoMap);
             return toInsertIntoMap;
         }
     }
 
+    /**
+     * 代表 需要统计数据
+     * @return
+     */
     @Override
     protected boolean commandIsScalar() {
         return true;

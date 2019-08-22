@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * @param <Event> type of raw data that needs to get summarized into a bucket
  * @param <Bucket> type of data contained in each bucket
  * @param <Output> type of data emitted to stream subscribers (often is the same as A but does not have to be)
- *                桶计数流 泛型相关的 3个参数 event 代表 hystrixEvent 第二个参数 代表 long[] 代表 bucket 中的数据  output 应该是输出的目标
+ *                以单个桶为单位的 计数流对象
  */
 public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, Output> {
     /**
@@ -76,7 +76,7 @@ public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, 
         this.numBuckets = numBuckets;
 
         // 初始化 减少桶的 函数  param1 代表入参类型 param2 代表 返回类型
-        // 将 Observable 对象转换成 bucket 对象
+        // 该函数应该是代表 将 发射下来的所有数据 按照 appendRawEventToBucket 汇聚成一个数据  eventBucket就是上游的初始事件对象 比如 HealthCountStream
         this.reduceBucketToSummary = new Func1<Observable<Event>, Observable<Bucket>>() {
             @Override
             public Observable<Bucket> call(Observable<Event> eventBucket) {
@@ -88,6 +88,7 @@ public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, 
         // 生成一个 固定的 observable 数据头 代表每次发射 都会携带这些数据
         final List<Bucket> emptyEventCountsToStart = new ArrayList<Bucket>();
         for (int i = 0; i < numBuckets; i++) {
+            // 为每个 桶对象 添加 初始空数据 每个桶 中记录了 所有事件的值 一开始所有事件数据都是 空  多个 空桶就可以看作是 画卷 roll 的 初始状态  | 0| 0| 0| 0|  类似这样
             emptyEventCountsToStart.add(getEmptyBucketSummary());
         }
 
@@ -97,14 +98,15 @@ public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, 
             // 当被订阅后会 触发这个方法  并返回了一个新的 observable 对象 并且会调用这个对象的 unsubscribe
             @Override
             public Observable<Bucket> call() {
-                // 通过包装初始化使用的 observable 对象
+                // 获取上游对象
                 return inputEventStream
+                        // 获取上游的可读数据源  就是 直接接收 hystrix 下发的事件
                         .observe()
-                        // 代表将上面的observable 分解 每隔 bucketSizeInms 的时间 发射一个新的Observable 对象
+                        // 每次 按照一个桶的 时间 返回一个元素  原本 每次 触发一次 CommandComplete 事件 就会发射一个元素  这样就限制成 按照 bucket 为单位来发射数据(以observable 的形式)
                         .window(bucketSizeInMs, TimeUnit.MILLISECONDS) //bucket it by the counter window so we can emit to the next operator in time chunks, not on every OnNext
-                        // 将 observable 对象 转换成 bucket 对象
+                        // window 会 下发多个数据流 然后 reduceBucketToSummary 内部使用 reduce 将数据流 也就是一个桶的时间内的数据(发射多个对象) 汇聚成 一个数据源 (发射单个对象)
                         .flatMap(reduceBucketToSummary)                //for a given bucket, turn it into a long array containing counts of event types
-                        // 为每个 结果 添加一个 固定的数据头
+                        // 为每个 结果 添加一个 固定的数据头 (也就是前面的 空 画卷)  保证子类调用 window 时
                         .startWith(emptyEventCountsToStart);           //start it with empty arrays to make consumer logic as generic as possible (windows are always full)
             }
         });

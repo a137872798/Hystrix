@@ -45,6 +45,7 @@ public abstract class HystrixObservableCommand<R> extends AbstractCommand<R> imp
      *            <p>
      *            The {@link HystrixCommandGroupKey} is used to represent a common relationship between commands. For example, a library or team name, the system all related commands interace with,
      *            common business purpose etc.
+     *            使用 set进行初始化
      */
     protected HystrixObservableCommand(HystrixCommandGroupKey group) {
         // use 'null' to specify use the default
@@ -57,17 +58,26 @@ public abstract class HystrixObservableCommand<R> extends AbstractCommand<R> imp
      *
      * @return if onNext events should be reported on
      * This affects {@link HystrixRequestLog}, and {@link HystrixEventNotifier} currently.  Metrics/Hooks later
+     * 代表 需要发射数据到下游
      */
     @Override
     protected boolean shouldOutputOnNextEvents() {
         return true;
     }
 
+    /**
+     * 获取回退方法名
+     * @return
+     */
     @Override
     protected String getFallbackMethodName() {
         return "resumeWithFallback";
     }
 
+    /**
+     * 判断用户是否设置了回退方法
+     * @return
+     */
     @Override
     protected boolean isFallbackUserDefined() {
         Boolean containsFromMap = commandContainsFallback.get(commandKey);
@@ -86,6 +96,10 @@ public abstract class HystrixObservableCommand<R> extends AbstractCommand<R> imp
         }
     }
 
+    /**
+     * 代表不需要 修改数据
+     * @return
+     */
     @Override
     protected boolean commandIsScalar() {
         return false;
@@ -115,6 +129,7 @@ public abstract class HystrixObservableCommand<R> extends AbstractCommand<R> imp
      * Some of these never have a legitimate reason for injection except in unit testing.
      * <p>
      * Most of the args will revert to a valid default if 'null' is passed in.
+     * 初始化 command 对象
      */
     HystrixObservableCommand(HystrixCommandGroupKey group, HystrixCommandKey key, HystrixThreadPoolKey threadPoolKey, HystrixCircuitBreaker circuitBreaker, HystrixThreadPool threadPool,
             HystrixCommandProperties.Setter commandPropertiesDefaults, HystrixThreadPoolProperties.Setter threadPoolPropertiesDefaults,

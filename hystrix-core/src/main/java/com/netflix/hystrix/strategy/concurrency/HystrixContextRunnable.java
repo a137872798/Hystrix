@@ -26,9 +26,19 @@ import com.netflix.hystrix.strategy.HystrixPlugins;
  */
 public class HystrixContextRunnable implements Runnable {
 
+    /**
+     * 回调对象
+     */
     private final Callable<Void> actual;
+    /**
+     * hystrix 上下文
+     */
     private final HystrixRequestContext parentThreadState;
 
+    /**
+     * 通过 回调对象 和 当前并发策略(concurrencyStrategy 封装了 线程池相关的属性) 生成对象
+     * @param actual
+     */
     public HystrixContextRunnable(Runnable actual) {
         this(HystrixPlugins.getInstance().getConcurrencyStrategy(), actual);
     }
@@ -38,6 +48,7 @@ public class HystrixContextRunnable implements Runnable {
     }
 
     public HystrixContextRunnable(final HystrixConcurrencyStrategy concurrencyStrategy, final HystrixRequestContext hystrixRequestContext, final Runnable actual) {
+        // 包装传入的 runnable
         this.actual = concurrencyStrategy.wrapCallable(new Callable<Void>() {
 
             @Override

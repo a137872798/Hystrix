@@ -27,13 +27,23 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * Per-Command stream of {@link HystrixCommandExecutionStarted}s.  This gets written to by {@link HystrixThreadEventStream}s.
  * Events are emitted synchronously in the same thread that performs the command execution.
+ * 该对象 用于下发 HystrixCommandExecutionStarted
  */
 public class HystrixCommandStartStream implements HystrixEventStream<HystrixCommandExecutionStarted> {
     private final HystrixCommandKey commandKey;
 
+    /**
+     * 桥接对象
+     */
     private final Subject<HystrixCommandExecutionStarted, HystrixCommandExecutionStarted> writeOnlySubject;
+    /**
+     * 事件流
+     */
     private final Observable<HystrixCommandExecutionStarted> readOnlyStream;
 
+    /**
+     * 保证全局唯一
+     */
     private static final ConcurrentMap<String, HystrixCommandStartStream> streams = new ConcurrentHashMap<String, HystrixCommandStartStream>();
 
     public static HystrixCommandStartStream getInstance(HystrixCommandKey commandKey) {
@@ -54,10 +64,16 @@ public class HystrixCommandStartStream implements HystrixEventStream<HystrixComm
         }
     }
 
+    /**
+     * 使用 command 初始化 对象
+     * @param commandKey
+     */
     HystrixCommandStartStream(final HystrixCommandKey commandKey) {
         this.commandKey = commandKey;
 
+        // 创建自订阅后 接受到的数据
         this.writeOnlySubject = new SerializedSubject<HystrixCommandExecutionStarted, HystrixCommandExecutionStarted>(PublishSubject.<HystrixCommandExecutionStarted>create());
+        // 生成专门用于 对外观测的对象
         this.readOnlyStream = writeOnlySubject.share();
     }
 
@@ -65,6 +81,10 @@ public class HystrixCommandStartStream implements HystrixEventStream<HystrixComm
         streams.clear();
     }
 
+    /**
+     * write 就是 将数据写入到 subject ， 这个对象会进一步下发数据  外部应该是通过 observe 获取 能够订阅该发射数据的 可观察对象 进一步处理数据
+     * @param event
+     */
     public void write(HystrixCommandExecutionStarted event) {
         writeOnlySubject.onNext(event);
     }

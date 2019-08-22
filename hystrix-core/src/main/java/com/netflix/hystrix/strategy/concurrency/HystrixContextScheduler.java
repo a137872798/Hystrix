@@ -29,7 +29,7 @@ import com.netflix.hystrix.strategy.HystrixPlugins;
 /**
  * Wrap a {@link Scheduler} so that scheduled actions are wrapped with {@link HystrixContexSchedulerAction} so that
  * the {@link HystrixRequestContext} is properly copied across threads (if they are used by the {@link Scheduler}).
- * hystrix 定时器对象
+ * hystrix 定时器对象  在 rxjava 中 将任务提交给 scheduler  实质上 该任务 会转交给 内部的 Worker 对象
  */
 public class HystrixContextScheduler extends Scheduler {
 
@@ -74,17 +74,23 @@ public class HystrixContextScheduler extends Scheduler {
         this.actualScheduler = new ThreadPoolScheduler(threadPool, shouldInterruptThread);
     }
 
-    // 这里就是 把 worker 封装了一层
+    /**
+     * 这里就是 把 worker 封装了一层
+     * @return
+     */
     @Override
     public Worker createWorker() {
         return new HystrixContextSchedulerWorker(actualScheduler.createWorker());
     }
 
     /**
-     * rxjava 的 调度器 代理对象
+     * rxjava 的 调度器 代理对象 该对象本身拓展了 worker对象
      */
     private class HystrixContextSchedulerWorker extends Worker {
 
+        /**
+         * 该 worker 对象对应的是 hystrix封装过的  ThreadPoolWorker 对象
+         */
         private final Worker worker;
 
         private HystrixContextSchedulerWorker(Worker actualWorker) {
@@ -102,7 +108,7 @@ public class HystrixContextScheduler extends Scheduler {
         }
 
         /**
-         *
+         * 针对 该worker 提交任务的时候 会判断 当前队列是否还有足够的空间 不足的话 就抛出异常
          * @param action
          * @param delayTime
          * @param unit
@@ -115,6 +121,9 @@ public class HystrixContextScheduler extends Scheduler {
                     throw new RejectedExecutionException("Rejected command because thread-pool queueSize is at rejection threshold.");
                 }
             }
+            // 提交任务到线程池  HystrixContexSchedulerAction 对象在 执行时 会处于 当前的上下文环境中 而不是 线程池内部的上下文环境 那么上下文是否会遇到并发问题呢 在
+            // 上下文对象中可以看到 context 中维护了一个并发容器对象 就是为了针对这种情况
+            // 因为 action 对象 应该是在一个其他线程执行的 也就获取不到 上下文对象
             return worker.schedule(new HystrixContexSchedulerAction(concurrencyStrategy, action), delayTime, unit);
         }
 
@@ -130,9 +139,15 @@ public class HystrixContextScheduler extends Scheduler {
 
     }
 
+    /**
+     * 线程调度器 对象 拓展了 rxjava 默认的 调度器
+     */
     private static class ThreadPoolScheduler extends Scheduler {
 
         private final HystrixThreadPool threadPool;
+        /**
+         * 是否应该 提示当前线程中断 默认为ture
+         */
         private final Func0<Boolean> shouldInterruptThread;
 
         public ThreadPoolScheduler(HystrixThreadPool threadPool, Func0<Boolean> shouldInterruptThread) {
@@ -140,6 +155,10 @@ public class HystrixContextScheduler extends Scheduler {
             this.shouldInterruptThread = shouldInterruptThread;
         }
 
+        /**
+         * 将创建的 worker 替换成 hystrix 的 worker
+         * @return
+         */
         @Override
         public Worker createWorker() {
             return new ThreadPoolWorker(threadPool, shouldInterruptThread);
@@ -155,11 +174,21 @@ public class HystrixContextScheduler extends Scheduler {
      * <p>
      * For the Hystrix case, each Command invocation has a single action so the concurrency
      * issue is not a problem.
+     * 指定了 worker 内部的线程池对象
      */
     private static class ThreadPoolWorker extends Worker {
 
+        /**
+         * 指定线程池 内部包含了 hystrix 的prop
+         */
         private final HystrixThreadPool threadPool;
+        /**
+         * 订阅者对象
+         */
         private final CompositeSubscription subscription = new CompositeSubscription();
+        /**
+         * 提示线程是否应该被中断
+         */
         private final Func0<Boolean> shouldInterruptThread;
 
         public ThreadPoolWorker(HystrixThreadPool threadPool, Func0<Boolean> shouldInterruptThread) {
@@ -177,6 +206,11 @@ public class HystrixContextScheduler extends Scheduler {
             return subscription.isUnsubscribed();
         }
 
+        /**
+         * 明确了 在提交任务前 必须要 有订阅者
+         * @param action
+         * @return
+         */
         @Override
         public Subscription schedule(final Action0 action) {
             if (subscription.isUnsubscribed()) {
@@ -190,6 +224,7 @@ public class HystrixContextScheduler extends Scheduler {
             subscription.add(sa);
             sa.addParent(subscription);
 
+            // 提交任务
             ThreadPoolExecutor executor = (ThreadPoolExecutor) threadPool.getExecutor();
             FutureTask<?> f = (FutureTask<?>) executor.submit(sa);
             sa.add(new FutureCompleterWithConfigurableInterrupt(f, shouldInterruptThread, executor));
@@ -205,6 +240,7 @@ public class HystrixContextScheduler extends Scheduler {
 
     /**
      * Very similar to rx.internal.schedulers.ScheduledAction.FutureCompleter, but with configurable interrupt behavior
+     * 代表可打断任务
      */
     private static class FutureCompleterWithConfigurableInterrupt implements Subscription {
         private final FutureTask<?> f;
@@ -217,6 +253,9 @@ public class HystrixContextScheduler extends Scheduler {
             this.executor = executor;
         }
 
+        /**
+         * 当触发取消订阅时 尝试进行打断
+         */
         @Override
         public void unsubscribe() {
             executor.remove(f);

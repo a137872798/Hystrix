@@ -22,10 +22,13 @@ import com.netflix.hystrix.HystrixThreadPoolKey;
 /**
  * Data class that get fed to event stream when a command starts executing.
  * 代表command 开始 execution 时的 事件对象
+ * 每个 commandKey 和 threadPoolKey 定位到一个 event 对象
+ * 该对象是 由  HystrixThreadEventStream 创建的 在 command 需要发出事件到下游时 就会 通过 HystrixThreadEventStream 创建对应的 CommandEvent对象（比如HystrixCommandExecutionStarted）
+ * 并将对象发送到下游
  */
 public class HystrixCommandExecutionStarted extends HystrixCommandEvent {
     /**
-     * 执行隔离策略
+     * 执行隔离策略  分为 信号量和线程池 隔离
      */
     private final HystrixCommandProperties.ExecutionIsolationStrategy isolationStrategy;
     /**

@@ -29,6 +29,7 @@ import com.netflix.hystrix.strategy.concurrency.HystrixRequestContext;
 /**
  * Example {@link HystrixCommand} implementation for handling the get-set-get use case within
  * a single request context so that the "set" can invalidate the cached "get".
+ * 代表 隔离的 2个方法
  */
 public class CommandUsingRequestCacheInvalidation {
 

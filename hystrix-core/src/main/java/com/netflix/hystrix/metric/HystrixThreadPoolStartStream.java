@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * Per-ThreadPool stream of {@link HystrixCommandExecutionStarted}s.  This gets written to by {@link HystrixThreadEventStream}s.
  * Events are emitted synchronously in the same thread that performs the command execution.
+ * 当 command 开始执行时 如果 使用的隔离策略是  threadPool 就将该事件下发
  */
 public class HystrixThreadPoolStartStream implements HystrixEventStream<HystrixCommandExecutionStarted> {
 
