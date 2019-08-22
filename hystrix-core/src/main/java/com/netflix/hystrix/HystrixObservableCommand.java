@@ -226,6 +226,7 @@ public abstract class HystrixObservableCommand<R> extends AbstractCommand<R> imp
      * Implement this method with code to be executed when {@link #observe()} or {@link #toObservable()} are invoked.
      * 
      * @return R response type
+     * 当 observe()  toObservable 被调用时 触发该方法
      */
     protected abstract Observable<R> construct();
 
