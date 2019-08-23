@@ -76,6 +76,7 @@ public class GetUserAccountCommand extends HystrixCommand<UserAccount> {
     /**
      * Use the HttpCookie value as the cacheKey so multiple executions
      * in the same HystrixRequestContext will respond from cache.
+     * 将 httpCookie 的 value 作为 缓存键对象 当调用command 时 如果开启了 缓存 且 缓存键相同 就会返回相同数据
      */
     @Override
     protected String getCacheKey() {
@@ -85,6 +86,7 @@ public class GetUserAccountCommand extends HystrixCommand<UserAccount> {
     /**
      * Fallback that will use data from the UserCookie and stubbed defaults
      * to create a UserAccount if the network call failed.
+     * 这里是 用户代码 中自定义的 当command 执行失败时 调用的方法
      */
     @Override
     protected UserAccount getFallback() {
@@ -108,6 +110,7 @@ public class GetUserAccountCommand extends HystrixCommand<UserAccount> {
          * @return UserCookie
          * @throws IllegalArgumentException
          *             if cookie is invalid
+         *             解析传入的 cookie 对象
          */
         private static UserCookie parseCookie(HttpCookie cookie) {
             /* real code would parse the cookie here */
@@ -116,10 +119,17 @@ public class GetUserAccountCommand extends HystrixCommand<UserAccount> {
                 return new UserCookie(12345, "Henry Peter", 1);
             } else {
                 /* invalid cookie */
+                // 应该是模拟 99.8的成功率
                 throw new IllegalArgumentException();
             }
         }
 
+        /**
+         * 代表用户信息
+         * @param userId
+         * @param name
+         * @param accountType
+         */
         public UserCookie(int userId, String name, int accountType) {
             this.userId = userId;
             this.name = name;

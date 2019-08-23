@@ -58,7 +58,8 @@ public abstract class BucketedRollingCounterStream<Event extends HystrixEvent, B
         Func1<Observable<Bucket>, Observable<Output>> reduceWindowToSummary = new Func1<Observable<Bucket>, Observable<Output>>() {
             @Override
             public Observable<Output> call(Observable<Bucket> window) {
-                // 每2个数据 使用一个函数处理并 发射   deduce 是将所有数据处理完后再一次性发射  这里跳过 numbucket 应该就是对应父类会 添加 numbucket 的 空对象
+                // 每2个数据 使用一个函数处理并 发射   deduce 是将所有数据处理完后再一次性发射   因为 设置了初始值getEmptyOutputValue() 所以 生成的数据流 其实是 bucket+1 这里跳过 bucket 数量 只保留最后一个
+                // 该函数 (scan(param1, param2).skip) 等价于 reduce
                 return window.scan(getEmptyOutputValue(), reduceBucket).skip(numBuckets);
             }
         };
@@ -66,7 +67,7 @@ public abstract class BucketedRollingCounterStream<Event extends HystrixEvent, B
         this.sourceStream = bucketedStream      //stream broken up into buckets
                 // 每经过 一个 单元的数据 （父类 按照 bucket 作为一个单位）打开一个新的 数据源 每个数据源 包含 画卷大小的bucket 也就是 该对象 是以 画卷为单位 父类以 bucket 为单位
                 .window(numBuckets, 1)          //emit overlapping windows of buckets
-                // 代表每个 传入的 数据源 执行reduceWindowToSummary  也就是以画卷为单位  scan 代表 每发射 的一个新元素就是  之前全局元素值的总和  1,2,3,4 -> 1,3,6,10
+                // 代表每个 传入的 数据源 执行reduceWindowToSummary  也就是以画卷为单位 这里发射出去的数据就是整个 画卷的 数据量
                 .flatMap(reduceWindowToSummary) //convert a window of bucket-summaries into a single summary
                 .doOnSubscribe(new Action0() {
                     @Override

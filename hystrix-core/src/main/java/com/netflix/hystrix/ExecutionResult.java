@@ -331,7 +331,7 @@ public class ExecutionResult {
      * @return
      */
     public static ExecutionResult from(HystrixEventType... eventTypes) {
-        // 是否 完成执行 ??? 无论 成功 失败 执行完成 才会设置成 true吧
+        // 如果是从缓存中获取 这里是false
         boolean didExecutionOccur = false;
         for (HystrixEventType eventType: eventTypes) {
             if (didExecutionOccur(eventType)) {

@@ -53,7 +53,7 @@ import org.slf4j.LoggerFactory;
  * 
  * @ExcludeFromJavadoc
  * @ThreadSafe
- * 默认的请求变量  该类对于用户来说 就是一个 模子 需要子类去修改核心方法 这里 拓展了 RequestContext 的概念 针对每条线程 绑定一个 请求上下文对象
+ * 该对象 是 requestContext 中维护的 缓存的 key 对象 通过设定泛型 确认 返回值类型
  */
 public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<T> {
     static final Logger logger = LoggerFactory.getLogger(HystrixRequestVariableDefault.class);
@@ -70,7 +70,7 @@ public class HystrixRequestVariableDefault<T> implements HystrixRequestVariable<
      * 
      * @return the value of the variable for the current request,
      *         or null if no value has been set and there is no initial value
-     *         获取当前上下文中保存的值
+     *         获取当前上下文中保存的值  而 如果开启了 缓存模式 会从该对象中获取缓存数据
      */
     @SuppressWarnings("unchecked")
     public T get() {

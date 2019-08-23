@@ -116,7 +116,7 @@ public class HealthCountsStream extends BucketedRollingCounterStream<HystrixComm
                     healthStream = existingStream;
                 }
             }
-            // 使用 BehaviorSubject 作为 订阅者  这种 observable 可能是必须要有订阅者 才能 发送数据到下游
+            // 使用 BehaviorSubject 作为 订阅者  该对象 会为 每个 订阅者 返回上个 数据
             healthStream.startCachingStreamValuesIfUnstarted();
             return healthStream;
         }

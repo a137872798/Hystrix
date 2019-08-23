@@ -262,6 +262,11 @@ public interface HystrixThreadPool {
             });
         }
 
+        /**
+         * hystrix 就是通过 这里返回的 Schduler 实现线程隔离的
+         * @param shouldInterruptThread  代表 是否应该发起中断
+         * @return
+         */
         @Override
         public Scheduler getScheduler(Func0<Boolean> shouldInterruptThread) {
             touchConfig();

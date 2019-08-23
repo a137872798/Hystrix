@@ -346,7 +346,7 @@ public interface HystrixCircuitBreaker {
         }
 
         /**
-         * 是否 在 沉睡窗口
+         * 是否 过了 等待窗口
          * @return
          */
         private boolean isAfterSleepWindow() {

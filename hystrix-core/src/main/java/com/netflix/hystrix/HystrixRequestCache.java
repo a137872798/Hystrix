@@ -53,12 +53,12 @@ public class HystrixRequestCache {
      * A ConcurrentHashMap per 'prefix' and per request scope that is used to to dedupe requests in the same request.
      * <p>
      * Key => CommandPrefix + CacheKey : Future<?> from queue()
-     * 请求变量的缓存
+     * 针对 请求结果的 缓存容器 实际上保存在 requestContext 的容器中 作为key
      */
     private static final HystrixRequestVariableHolder<ConcurrentHashMap<ValueCacheKey, HystrixCachedObservable<?>>> requestVariableForCache = new HystrixRequestVariableHolder<ConcurrentHashMap<ValueCacheKey, HystrixCachedObservable<?>>>(new HystrixRequestVariableLifecycle<ConcurrentHashMap<ValueCacheKey, HystrixCachedObservable<?>>>() {
 
         /**
-         * 内部的 HystrixRequestVariableLifecycle 对象初始化的时候 就是生成一个 CHM 对象
+         * 当 reqContext 中 该key 对应的value 还没有初始化时 调用initialValue 生成结果对象
          * @return
          */
         @Override
@@ -84,6 +84,7 @@ public class HystrixRequestCache {
     }
 
     public static HystrixRequestCache getInstance(HystrixCommandKey key, HystrixConcurrencyStrategy concurrencyStrategy) {
+        // 每次生成的 RequestCacheKey 都是新的  不过获取时 根据equals 判断还是能获取到一样的结果对象
         return getInstance(new RequestCacheKey(key, concurrencyStrategy), concurrencyStrategy);
     }
 
@@ -126,12 +127,13 @@ public class HystrixRequestCache {
         // 将缓存键 转换为 value 缓存键
         ValueCacheKey key = getRequestCacheKey(cacheKey);
         if (key != null) {
-            // 这里首先要保证 能够通过 strategy 对象获取到 容器对象 否则抛出异常  get的时候默认会调用 init方法去初始化一个 chm 对象 这里一般是不会存在返回null 的情况
+            // 从 reqV 对象中获取 缓存容器  实际上 是 从 线程绑定的  RequestContext 中获取的
             ConcurrentHashMap<ValueCacheKey, HystrixCachedObservable<?>> cacheInstance = requestVariableForCache.get(concurrencyStrategy);
             if (cacheInstance == null) {
                 throw new IllegalStateException("Request caching is not available. Maybe you need to initialize the HystrixRequestContext?");
             }
             /* look for the stored value */
+            // 查询是否有数据缓存了
             return (HystrixCachedObservable<T>) cacheInstance.get(key);
         }
         return null;
@@ -152,7 +154,7 @@ public class HystrixRequestCache {
     // suppressing warnings because we are using a raw Future since it's in a heterogeneous ConcurrentHashMap cache
     @SuppressWarnings({ "unchecked" })
     /* package */<T> HystrixCachedObservable<T> putIfAbsent(String cacheKey, HystrixCachedObservable<T> f) {
-        // ValueCacheKey 内部维护了 requestCache 对象 该 缓存键是用来获取 CacheObservable 对象
+        // 对应到 某个数据的缓存键 精确到 UserCommand(command 类型) + userId (标识某一数据)
         ValueCacheKey key = getRequestCacheKey(cacheKey);
         if (key != null) {
             /* look for the stored value */
@@ -211,11 +213,11 @@ public class HystrixRequestCache {
      */
     private static class ValueCacheKey {
         /**
-         * 请求缓存键
+         * 请求缓存键  一般就是 commandKey   比如 对应 UserCommand
          */
         private final RequestCacheKey rvKey;
         /**
-         * 数值的缓存键
+         * 对应到 一个command 中 详细区分获取数据的 缓存键  比如 对应 userId    这样多个UserCommand 使用不同的 userId 获取到的就是不同对象
          */
         private final String valueCacheKey;
 

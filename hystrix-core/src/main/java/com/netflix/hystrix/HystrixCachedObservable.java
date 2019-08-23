@@ -16,7 +16,7 @@ public class HystrixCachedObservable<R> {
      */
     protected final Subscription originalSubscription;
     /**
-     * 可观察对象
+     * 被缓存的 observable 对象
      */
     protected final Observable<R> cachedObservable;
     /**
@@ -24,8 +24,12 @@ public class HystrixCachedObservable<R> {
      */
     private volatile int outstandingSubscriptions = 0;
 
+    /**
+     * 传入 某次 执行command 后的结果 生成缓存对象
+     * @param originalObservable
+     */
     protected HystrixCachedObservable(final Observable<R> originalObservable) {
-        // 该对象会 发送 可观察对象 一开始的 全部数据  为什么用subject 就是为了 做代理 让数据 订阅它
+        // 该对象会 发送 可观察对象一开始的 全部数据  为什么用subject 就是为了 做代理 让数据 订阅它
         ReplaySubject<R> replaySubject = ReplaySubject.create();
         // 该对象为 可观察对象被订阅后生成的
         this.originalSubscription = originalObservable
@@ -39,6 +43,7 @@ public class HystrixCachedObservable<R> {
                     public void call() {
                         outstandingSubscriptions--;
                         if (outstandingSubscriptions == 0) {
+                            // 只要该缓存还有人在使用 就不会被取消订阅
                             originalSubscription.unsubscribe();
                         }
                     }

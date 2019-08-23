@@ -323,7 +323,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
     }
 
     /**
-     * 获取执行过程中的 可观察对象
+     * 获取执行过程中的 可观察对象  也就是command 成功获取到执行机会时 会走下面的逻辑
      * @return
      */
     @Override
@@ -333,7 +333,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
             @Override
             public Observable<R> call() {
                 try {
-                    // 返回调用run 的 对象
+                    // 返回调用run 的 对象 run方法就是 用户代表
                     return Observable.just(run());
                 } catch (Throwable ex) {
                     return Observable.error(ex);
@@ -344,13 +344,14 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
             @Override
             public void call() {
                 // Save thread on which we get subscribed so that we can interrupt it later if needed
+                // 当订阅者订阅 获取用户执行结果时 设置当前执行线程
                 executionThread.set(Thread.currentThread());
             }
         });
     }
 
     /**
-     * 获得回退的 观察者对象
+     * 获得 子类实现的 回退方法
      * @return
      */
     @Override
@@ -417,6 +418,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
          * interruption of the execution thread when the "mayInterrupt" flag of Future.cancel(boolean) is set to true;
          * thus, to comply with the contract of Future, we must wrap around it.
          * 获取 具备 hystrix 熔断功能的 observable 对象 并转换成一个 future 对象
+         * 通过 构造Command 对象后 调用 queue 获取结果对象 (或者调用 execute() 阻塞获取结果对象)
          */
         final Future<R> delegate = toObservable().toBlocking().toFuture();
 

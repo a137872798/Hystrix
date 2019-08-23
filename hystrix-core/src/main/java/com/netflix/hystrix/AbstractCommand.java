@@ -335,7 +335,7 @@ import java.util.concurrent.atomic.AtomicReference;
         // 初始化 钩子对象
         this.executionHook = initExecutionHook(executionHook);
 
-        // 针对请求 的 缓存对象 这里要确保 concurrencyStrategy 是一致的
+        // 针对请求 的 缓存对象 这里要确保 concurrencyStrategy 是一致的  针对 commandKey 相同的情况 requestCache 是一样的对象 这样就能保证  多个 command 实例（但是 commandKey一样） 能使用相同的 缓存
         this.requestCache = HystrixRequestCache.getInstance(this.commandKey, this.concurrencyStrategy);
         // 根据 请求对象 在 执行过程中的 情况 记录 日志 默认打开
         this.currentRequestLog = initRequestLog(this.properties.requestLogEnabled().get(), this.concurrencyStrategy);
@@ -571,7 +571,7 @@ import java.util.concurrent.atomic.AtomicReference;
      *             via {@code Observer#onError} if invalid arguments or state were used representing a user failure, not a system failure
      * @throws IllegalStateException
      *             if invoked more than once
-     *             获取观察者对象  这里返回的是一个 cold 对象
+     *             获取执行本 command  返回的 observable 对象
      */
     public Observable<R> toObservable() {
         final AbstractCommand<R> _cmd = this;
@@ -636,15 +636,16 @@ import java.util.concurrent.atomic.AtomicReference;
         };
 
         /**
-         * 应用 hystrix 语义
+         * 应用 hystrix 语义  这里会调用 command实现类的 核心方法
          */
         final Func0<Observable<R>> applyHystrixSemantics = new Func0<Observable<R>>() {
             @Override
             public Observable<R> call() {
-                // 如果还没有被订阅 返回 不会发射任何数据的观察者
+                // 如果 状态被设置成不可订阅 返回空数据源
                 if (commandState.get().equals(CommandState.UNSUBSCRIBED)) {
                     return Observable.never();
                 }
+                // 使用 hystrix 包裹 command 执行
                 return applyHystrixSemantics(_cmd);
             }
         };
@@ -684,9 +685,14 @@ import java.util.concurrent.atomic.AtomicReference;
         };
 
         /**
-         * Observable 工厂对象
+         * Observable 工厂对象 上面的 函数对象先不看 针对 toObservable()方法 每个订阅者 会获取到一个 全新的 observable 对象
          */
         return Observable.defer(new Func0<Observable<R>>() {
+
+            /**
+             * 生成返回对象的 工厂
+             * @return
+             */
             @Override
             public Observable<R> call() {
                 /* this is a stateful object so can only be used once */
@@ -708,24 +714,27 @@ import java.util.concurrent.atomic.AtomicReference;
                     }
                 }
 
-                // 判断是否为 req 对象做缓存  默认的 缓存键为 null
+                // 判断是否为 req 对象做缓存  默认的 缓存键为 null  一般 对应 用户信息 可以尝试使用 用户id 作为缓存键
                 final boolean requestCacheEnabled = isRequestCachingEnabled();
                 // 获取缓存键对象
                 final String cacheKey = getCacheKey();
 
                 /* try from cache first */
+                // 看来如果尝试从缓存中获取 是不会考虑是否被熔断的
                 if (requestCacheEnabled) {
-                    // 尝试使用缓存键 获取 响应结果
+                    // 尝试使用缓存键 获取 响应结果  使用相同的 commandKey 时 生成的 requestCache是同一个对象
                     HystrixCommandResponseFromCache<R> fromCache = (HystrixCommandResponseFromCache<R>) requestCache.get(cacheKey);
                     if (fromCache != null) {
                         // 存在缓存 代表要从缓存中返回结果
                         isResponseFromCache = true;
+                        // 处理从缓存中 获取的结果
                         return handleRequestCacheHitAndEmitValues(fromCache, _cmd);
                     }
                 }
 
-                // 生成观察者数据对象的流
+                // 当没有使用缓存的时候 开始正常的执行command
                 Observable<R> hystrixObservable =
+                        // 每次发射的 元素 通过调用 applyHystrixSemantics 使得执行command 被 hystrix 包裹  这里返回的 observable 可能是发射error 的数据流
                         Observable.defer(applyHystrixSemantics)
                                 // 对该对象 的行为做封装 每次调用都会触发 hook.onComplete  和 onEmit
                                 .map(wrapWithAllOnNextHooks);
@@ -771,7 +780,7 @@ import java.util.concurrent.atomic.AtomicReference;
     }
 
     /**
-     * 应用hystrix语义??? 看来这里是开始 启用 observable 的 地方
+     * 应用hystrix语义
      * @param _cmd
      * @return
      */
@@ -781,9 +790,9 @@ import java.util.concurrent.atomic.AtomicReference;
         executionHook.onStart(_cmd);
 
         /* determine if we're allowed to execute */
-        // 通过熔断器判断是否允许当前命令执行
+        // 通过熔断器判断是否允许当前命令执行  刚创建 熔断器时 默认就是不拦截的
         if (circuitBreaker.attemptExecution()) {
-            // 生成本command 对应的 信号量对象
+            // 生成本command 对应的 信号量对象  如果使用的隔离策略是 信号量 就会限制 执行次数  因为每个 command 是共享信号量的
             final TryableSemaphore executionSemaphore = getExecutionSemaphore();
             // 默认情况下没有释放信号量
             final AtomicBoolean semaphoreHasBeenReleased = new AtomicBoolean(false);
@@ -805,11 +814,11 @@ import java.util.concurrent.atomic.AtomicReference;
                 }
             };
 
-            // 尝试获取门票
+            // 尝试获取门票  如果是没有 设置信号量的情况 这里不会做任何处理 实现是 noop
             if (executionSemaphore.tryAcquire()) {
                 try {
                     /* used to track userThreadExecutionTime */
-                    // 设置 任务启动事件
+                    // 设置 任务启动时间
                     executionResult = executionResult.setInvocationStartTime(System.currentTimeMillis());
                     // 开始执行任务
                     return executeCommandAndObserve(_cmd)
@@ -820,6 +829,8 @@ import java.util.concurrent.atomic.AtomicReference;
                     // 调用该方法会触发 Observer.onError
                     return Observable.error(e);
                 }
+
+                // 下面2种异常处理手段实际上都会 调用 fallback 方法 fallback本身执行失败 或者因某些原因 执行失败 还是会向下游抛出异常
             } else {
                 // 触发信号量 拒绝函数
                 return handleSemaphoreRejectionViaFallback();
@@ -930,7 +941,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
         Observable<R> execution;
 
-        // 判断是否允许 超时
+        // 上面都是 初始化一些函数对象 下面才开始执行任务
+
+        // 判断是否允许 超时  这里执行command 要看是否进行隔离
         if (properties.executionTimeoutEnabled().get()) {
             // 允许超时的话  将 command 隔离后 使用TimeoutOperator 进行代理
             // executeCommandWithSpecifiedIsolation 使用  thread  或者信号量进行隔离 之后返回 用户自定义的 Observable 对象
@@ -956,10 +969,10 @@ import java.util.concurrent.atomic.AtomicReference;
      * @return
      */
     private Observable<R> executeCommandWithSpecifiedIsolation(final AbstractCommand<R> _cmd) {
-        // 如果使用 thread 作为线程隔离策略
+        // 如果使用 thread 作为线程隔离策略  信号量隔离 是在外层起作用 就是同一个command 不能在短时间内 执行超过信号量的次数
         if (properties.executionIsolationStrategy().get() == ExecutionIsolationStrategy.THREAD) {
             // mark that we are executing in a thread (even if we end up being rejected we still were a THREAD execution and not SEMAPHORE)
-            // defer 代表一个 Observable 工厂 针对每个 Subscribe 都会创建一个新的 Observable 对象
+            // 这里没有直接返回结果 而是一个 observable 对象 每个订阅者都会拿到一个新对象 (都走一遍下面的逻辑)
             return Observable.defer(new Func0<Observable<R>>() {
                 @Override
                 public Observable<R> call() {
@@ -971,9 +984,10 @@ import java.util.concurrent.atomic.AtomicReference;
                     }
 
                     // 标记开始统计数据 并传入对应的 隔离策略  这里会发送事件流 到下游 这样相关的统计对象只要订阅了 对应对象的 subject 就可以 收集到数据
+                    // 这里 还会增加一个 并发数  在执行完 command 时 会根据 是否执行了 user代表 减少并发数 这个并发数 无论是否使用 Thread 做隔离 都需要记录
                     metrics.markCommandStart(commandKey, threadPoolKey, ExecutionIsolationStrategy.THREAD);
 
-                    // 如果当前超时
+                    // 如果当前超时 不允许正常执行
                     if (isCommandTimedOut.get() == TimedOutStatus.TIMED_OUT) {
                         // the command timed out in the wrapping thread so we will return immediately
                         // and not increment any of the counters below or other such logic
@@ -1000,9 +1014,10 @@ import java.util.concurrent.atomic.AtomicReference;
                             executionHook.onThreadStart(_cmd);
                             executionHook.onRunStart(_cmd);
                             executionHook.onExecutionStart(_cmd);
-                            // 获取用户设置的 可观察对象 并通过代理的方式 在执行相关方法的时候 插入 hook方法的调用
+                            // 将 用户的 run() 包装成 observable 对象
                             return getUserExecutionObservable(_cmd);
                         } catch (Throwable ex) {
+                            // 出现异常 情况 抛出异常
                             return Observable.error(ex);
                         }
                     } else {
@@ -1015,6 +1030,7 @@ import java.util.concurrent.atomic.AtomicReference;
             }).doOnTerminate(new Action0() {
                 @Override
                 public void call() {
+                    // 代表 本次执行结束
                     if (threadState.compareAndSet(ThreadState.STARTED, ThreadState.TERMINAL)) {
                         // 处理完成任务的逻辑
                         handleThreadEnd(_cmd);
@@ -1037,16 +1053,15 @@ import java.util.concurrent.atomic.AtomicReference;
                     }
                     //if it was terminal, then other cleanup handled it
                 }
-            // 被某个订阅者订阅时触发  这里会返回 rxjava 的线程调度对象 并根据该接口 判断 是否需要 在调度发起时 发出中断线程的 指令
+            // 在这里 使用 Schduler 实现了 线程隔离
             }).subscribeOn(threadPool.getScheduler(new Func0<Boolean>() {
                 @Override
                 public Boolean call() {
-                    // 当超时 且 设置在超时时 使用 中断
+                    // 使用线程隔离的情况下 超时是否中断线程
                     return properties.executionIsolationThreadInterruptOnTimeout().get() && _cmd.isCommandTimedOut.get() == TimedOutStatus.TIMED_OUT;
                 }
             }));
         } else {
-            // 这里代表使用信号量进行隔离
             return Observable.defer(new Func0<Observable<R>>() {
                 @Override
                 public Observable<R> call() {
@@ -1089,6 +1104,7 @@ import java.util.concurrent.atomic.AtomicReference;
      * @throws HystrixRuntimeException
      *             if getFallback() fails (throws an Exception) or is rejected by the semaphore
      *             应该是将传入的信息封装成 一个 Hystrix 异常对象并 发射到下游
+     *             这里即使observable 对象 会 弹出异常 之后的 处理对象 可能还是会以某种方式 继续进行重试
      */
     private Observable<R> getFallbackOrThrowException(final AbstractCommand<R> _cmd, final HystrixEventType eventType, final FailureType failureType, final String message, final Exception originalException) {
         // 获取上下文对象
@@ -1128,11 +1144,11 @@ import java.util.concurrent.atomic.AtomicReference;
                     }
                 };
 
-                // 用于标记 回退事件发射
+                // 处理回退方法 时收到 发射的元素
                 final Action1<R> markFallbackEmit = new Action1<R>() {
                     @Override
                     public void call(R r) {
-                        // 根据情况设置是否将结果 发射到下游 默认false
+                        // 是否 要 输出到下面的event 中
                         if (shouldOutputOnNextEvents()) {
                             executionResult = executionResult.addEvent(HystrixEventType.FALLBACK_EMIT);
                             // 标记成 回退发射
@@ -1141,7 +1157,7 @@ import java.util.concurrent.atomic.AtomicReference;
                     }
                 };
 
-                // 标记回退完成
+                // 标记执行回退完成
                 final Action0 markFallbackCompleted = new Action0() {
                     @Override
                     public void call() {
@@ -1153,7 +1169,7 @@ import java.util.concurrent.atomic.AtomicReference;
                     }
                 };
 
-                // 处理回退异常  当 接收到 onError后 会触发该方法
+                // 处理回退异常  当 接收到 onError后 会触发该方法  如果用户没有设置回退方法 就会返回一个 直接发射 error 的 observable 对象 也就会 触发这里的逻辑
                 final Func1<Throwable, Observable<R>> handleFallbackError = new Func1<Throwable, Observable<R>>() {
                     @Override
                     public Observable<R> call(Throwable t) {
@@ -1166,7 +1182,7 @@ import java.util.concurrent.atomic.AtomicReference;
                         long latency = System.currentTimeMillis() - executionResult.getStartTimestamp();
                         Exception toEmit;
 
-                        // 如果是 不支持操作 通知监听器 回退丢失
+                        // 没有设置回退方法的情况下 就会返回UnsupportedOperationException 代表 该command 本身就不支持回退
                         if (fe instanceof UnsupportedOperationException) {
                             logger.debug("No fallback for HystrixCommand. ", fe); // debug only since we're throwing the exception and someone higher will do something with it
                             eventNotifier.markEvent(HystrixEventType.FALLBACK_MISSING, commandKey);
@@ -1174,7 +1190,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
                             toEmit = new HystrixRuntimeException(failureType, _cmd.getClass(), getLogMessagePrefix() + " " + message + " and no fallback available.", e, fe);
                         } else {
-                            // 如果失败的情况
+                            // 如果执行 回退方法失败的情况
                             logger.debug("HystrixCommand execution " + failureType.name() + " and fallback failed.", fe);
                             // 标记回退失败
                             eventNotifier.markEvent(HystrixEventType.FALLBACK_FAILURE, commandKey);
@@ -1194,7 +1210,7 @@ import java.util.concurrent.atomic.AtomicReference;
                     }
                 };
 
-                // 获取 回退使用的信号量 看来回退 也是有数量限制的
+                // 获取 回退使用的信号量 看来回退 也是有数量限制的  如果 获取 回退的信号量 也失败 可能要等待一段时间  该信号量 是一定会设置的  而执行是否使用信号量是 根据隔离策略
                 final TryableSemaphore fallbackSemaphore = getFallbackSemaphore();
                 // 默认情况下 该信号量还没有被释放
                 final AtomicBoolean semaphoreHasBeenReleased = new AtomicBoolean(false);
@@ -1212,17 +1228,18 @@ import java.util.concurrent.atomic.AtomicReference;
                 Observable<R> fallbackExecutionChain;
 
                 // acquire a permit
+                // 上面只是 创建执行回退需要的 函数 这里才是真正执行回退的逻辑  如果 没有获取到 回退的信号量 会触发下游的 onError 不过这是默认情况
                 if (fallbackSemaphore.tryAcquire()) {
                     try {
-                        // 用户是否设置了 该方法 允许回退
+                        // 判断用户是否设置了自定义的回退方法  如果用户没有设置回退方法 返回的 fallbackExecutionChain 是一个会直接发射异常的 Observable 对象
                         if (isFallbackUserDefined()) {
                             // 代表 开始执行回退
                             executionHook.onFallbackStart(this);
-                            // 获取回退链
+                            // 该方法会 将command 实现类的  回退方法 返回结果 用 observable 包裹起来
                             fallbackExecutionChain = getFallbackObservable();
                         } else {
                             //same logic as above without the hook invocation
-                            // 同样会执行回退  只是不会触发钩子
+                            // 同样包装回退方法
                             fallbackExecutionChain = getFallbackObservable();
                         }
                     } catch (Throwable ex) {
@@ -1232,10 +1249,11 @@ import java.util.concurrent.atomic.AtomicReference;
                     }
 
                     return fallbackExecutionChain
-                            // 当调用 任何 环节时先触发该方法
+                            // 当调用 任何 环节时先触发该方法  如果执行该任务的线程 还没有设置上下文对象 就使用 command 的入口线程的上下文
                             .doOnEach(setRequestContext)
                             // lift 相当于是  代理函数 将 传入的 subscribe 转换成新的 订阅对象 再触发 事件源的 onSubscribe 方法
                             // 在一个 原始的 Observable 对象调用 lift(Operator) 后 会返回一个新的 Observable 对象 该对象内部的 整个订阅 逻辑以及替换成一个代理过后的对象了
+                            // 该lift 方法 只是在调用对应的 方法时 额外调用了 钩子方法
                             .lift(new FallbackHookApplication(_cmd))
                             // 也是执行 hook相关
                             .lift(new DeprecatedOnFallbackHookApplication(_cmd))
@@ -1250,7 +1268,7 @@ import java.util.concurrent.atomic.AtomicReference;
                             // 取消订阅时 释放信号量
                             .doOnUnsubscribe(singleSemaphoreRelease);
                 } else {
-                    // 如果 没有获取到信号量 返回一个 回退失败的Observable 对象
+                    // 如果进行回退时 没有获取到信号量 会触发下游的 onError
                     return handleFallbackRejectionByEmittingError();
                 }
             } else {
@@ -1269,7 +1287,7 @@ import java.util.concurrent.atomic.AtomicReference;
         Observable<R> userObservable;
 
         try {
-            // 子类实现
+            // 子类实现  应该是获取用户自定义的 observable 对象
             userObservable = getExecutionObservable();
         } catch (Throwable ex) {
             // the run() method is a user provided implementation so can throw instead of using Observable.onError
@@ -1285,20 +1303,21 @@ import java.util.concurrent.atomic.AtomicReference;
 
     /**
      * 从缓存中获取结果对象
-     * @param fromCache
-     * @param _cmd
+     * @param fromCache  缓存命中时返回的结果
+     * @param _cmd  本次执行的command 实例对象
      * @return
      */
     private Observable<R> handleRequestCacheHitAndEmitValues(final HystrixCommandResponseFromCache<R> fromCache, final AbstractCommand<R> _cmd) {
         try {
-            // 触发 缓存命中方法
+            // 触发 缓存命中方法  默认空钩子 不做任何处理
             executionHook.onCacheHit(this);
         } catch (Throwable hookEx) {
             logger.warn("Error calling HystrixCommandExecutionHook.onCacheHit", hookEx);
         }
 
+        // 应该是将 缓存中的数据 转移到 本 command 中
         return fromCache.toObservableWithStateCopiedInto(this)
-                // 终结时 触发
+                // 终结时 触发 (就是 触发 complete 或者 error)
                 .doOnTerminate(new Action0() {
                     @Override
                     public void call() {
@@ -1310,6 +1329,7 @@ import java.util.concurrent.atomic.AtomicReference;
                         }
                     }
                 })
+                // 当 缓存对象被取消订阅时
                 .doOnUnsubscribe(new Action0() {
                     @Override
                     public void call() {
@@ -1337,15 +1357,18 @@ import java.util.concurrent.atomic.AtomicReference;
 
         // 代表本次 command 的执行时间
         final long latency = System.currentTimeMillis() - commandStartTimestamp;
-        // 设置部分属性后 返回 为什么要设置成 该 result 对象每次都会返回一个新对象 而不是在原有的基础上修改属性
+        // 以下的流式操作类似于 builder  就是加工 result对象
         executionResult = executionResult
+                // 从缓存中获取 延迟 就是-1
                 .addEvent(-1, HystrixEventType.RESPONSE_FROM_CACHE)
                 .markUserThreadCompletion(latency)
                 .setNotExecutedInThread();
         // 该对象是 针对使用缓存的情况 作为统计数据用的
         ExecutionResult cacheOnlyForMetrics = ExecutionResult.from(HystrixEventType.RESPONSE_FROM_CACHE)
                 .markUserThreadCompletion(latency);
+        // 将本次结果 发射到数据流中
         metrics.markCommandDone(cacheOnlyForMetrics, commandKey, threadPoolKey, commandExecutionStarted);
+        // 通知监听器 本次 command 执行从缓存中获取
         eventNotifier.markEvent(HystrixEventType.RESPONSE_FROM_CACHE, commandKey);
     }
 
@@ -1402,11 +1425,12 @@ import java.util.concurrent.atomic.AtomicReference;
         // 标记 熔断事件
         eventNotifier.markEvent(HystrixEventType.SHORT_CIRCUITED, commandKey);
         // short-circuit and go directly to fallback (or throw an exception if no fallback implemented)
+        // 该异常 在之后是能重试的
         Exception shortCircuitException = new RuntimeException("Hystrix circuit short-circuited and is OPEN");
         // 设置异常结果
         executionResult = executionResult.setExecutionException(shortCircuitException);
         try {
-            // 根据情况 选择 回退 还是 抛出异常
+            // 根据情况 选择 回退 还是 抛出异常  因为 本command 也许不支持 回退逻辑
             return getFallbackOrThrowException(this, HystrixEventType.SHORT_CIRCUITED, FailureType.SHORTCIRCUIT,
                     "short-circuited", shortCircuitException);
         } catch (Exception e) {

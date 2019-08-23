@@ -77,6 +77,7 @@ public class HystrixThreadEventStream {
     private static final ThreadLocal<HystrixThreadEventStream> threadLocalStreams = new ThreadLocal<HystrixThreadEventStream>() {
         @Override
         protected HystrixThreadEventStream initialValue() {
+            // 通过当前线程来初始化 ThreadEventStream
             return new HystrixThreadEventStream(Thread.currentThread());
         }
     };
@@ -101,12 +102,18 @@ public class HystrixThreadEventStream {
         }
     };
 
+    /**
+     * 接收到 commandComplete 事件后
+     */
     private static final Action1<HystrixCommandCompletion> writeCommandCompletionsToShardedStreams = new Action1<HystrixCommandCompletion>() {
         @Override
         public void call(HystrixCommandCompletion commandCompletion) {
+            // 获取 该commandKey 对应的数据流
             HystrixCommandCompletionStream commandStream = HystrixCommandCompletionStream.getInstance(commandCompletion.getCommandKey());
+            // 将结果发射到下游
             commandStream.write(commandCompletion);
 
+            // 如果是从缓存获取是不走这里的
             if (commandCompletion.isExecutedInThread() || commandCompletion.isResponseThreadPoolRejected()) {
                 HystrixThreadPoolCompletionStream threadPoolStream = HystrixThreadPoolCompletionStream.getInstance(commandCompletion.getThreadPoolKey());
                 threadPoolStream.write(commandCompletion);
@@ -131,16 +138,19 @@ public class HystrixThreadEventStream {
         this.threadId = thread.getId();
         this.threadName = thread.getName();
 
-        // 创建 对应的 subject 接受到 订阅后的所有数据
+        // 创建3个数据流 可以用来写入 同时 订阅该 流的 订阅者 会收到 数据
         writeOnlyCommandStartSubject = PublishSubject.create();
         writeOnlyCommandCompletionSubject = PublishSubject.create();
         writeOnlyCollapserSubject = PublishSubject.create();
 
-        // 开启背压 设置 onNext 事件
+        //
+
+        // 开启背压 设置 onNext 事件  该对象 对应开始执行command
         writeOnlyCommandStartSubject
+                // 使用缓冲容器解决背压
                 .onBackpressureBuffer()
                 .doOnNext(writeCommandStartsToShardedStreams)
-                // 推测是 非线程安全的 订阅
+                // 推测是 非线程安全的 订阅  这里设置 empty 对象可能是代表不能直接订阅该对象
                 .unsafeSubscribe(Subscribers.empty());
 
         // 该对象 用于接收 到 command 执行完后 封装的 CommandComplete 对象 并发射到下游的订阅者

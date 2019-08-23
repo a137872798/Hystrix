@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
  * @param <T>
  * 
  * @ExcludeFromJavadoc
- * 请求变量包装器  具备缓存数据的能力
+ * 内部维护了缓存容器  该对象全局唯一
  */
 public class HystrixRequestVariableHolder<T> {
 
@@ -67,7 +67,6 @@ public class HystrixRequestVariableHolder<T> {
          * 2) If no implementation is found in cache then construct from factory.
          * 3) Cache implementation from factory as each object instance needs to be statically cached to be relevant across threads.
          */
-        // 每个 hystrixRequestVariableHolder 对象 对应一个 缓存键 要同时和 并发策略一起才起作用 (2者都相等才算是同一对象)
         RVCacheKey key = new RVCacheKey(this, concurrencyStrategy);
         // 尝试从静态缓存中获取
         HystrixRequestVariable<?> rvInstance = requestVariableInstance.get(key);

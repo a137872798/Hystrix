@@ -428,6 +428,7 @@ public class HystrixCommandMetrics extends HystrixMetrics {
      * @param executionStarted 代表是否正常执行了 代码 用户调用 Command 时 如果出现异常这里是false
      */
     /* package-private */ void markCommandDone(ExecutionResult executionResult, HystrixCommandKey commandKey, HystrixThreadPoolKey threadPoolKey, boolean executionStarted) {
+        // 首先创建 事件流对象 之后 将本次执行结果 发射进去 用于统计数据
         HystrixThreadEventStream.getInstance().executionDone(executionResult, commandKey, threadPoolKey);
         if (executionStarted) {
             // 减少当前执行的任务数

@@ -133,6 +133,7 @@ public abstract class BucketedCounterStream<Event extends HystrixEvent, Bucket, 
     public void startCachingStreamValuesIfUnstarted() {
         if (subscription.get() == null) {
             //the stream is not yet started
+            // 使用一个 subject 作为订阅者
             Subscription candidateSubscription = observe().subscribe(counterSubject);
             if (subscription.compareAndSet(null, candidateSubscription)) {
                 //won the race to set the subscription
