@@ -174,12 +174,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
     /* FALLBACK Semaphore */
     /**
-     * 针对 执行失败 尝试进行回退的信号量
+     * 针对 执行失败 尝试进行降级的信号量
      */
     protected final TryableSemaphore fallbackSemaphoreOverride;
     /* each circuit has a semaphore to restrict concurrent fallback execution */
     /**
-     * 每个循环器 有自己的 回退信号量???  回退次数可能是指 没有获取到 信号量的请求对象 重试 尝试获得 重新执行机会
+     * 每个循环器 有自己的 降级信号量???  降级次数可能是指 没有获取到 信号量的请求对象 重试 尝试获得 重新执行机会
      */
     protected static final ConcurrentHashMap<String, TryableSemaphore> fallbackSemaphorePerCircuit = new ConcurrentHashMap<String, TryableSemaphore>();
     /* END FALLBACK Semaphore */
@@ -262,7 +262,7 @@ import java.util.concurrent.atomic.AtomicReference;
     private static ConcurrentHashMap<Class<?>, String> defaultNameCache = new ConcurrentHashMap<Class<?>, String>();
 
     /**
-     * 回退命令容器 应该是 代表 某条命令是否回退
+     * 降级命令容器 应该是 代表 某条命令是否降级
      */
     protected static ConcurrentHashMap<HystrixCommandKey, Boolean> commandContainsFallback = new ConcurrentHashMap<HystrixCommandKey, Boolean>();
 
@@ -301,7 +301,7 @@ import java.util.concurrent.atomic.AtomicReference;
      * @param commandPropertiesDefaults  command 默认的属性
      * @param threadPoolPropertiesDefaults  线程池 默认的属性
      * @param metrics   测量对象
-     * @param fallbackSemaphore   处理 回退 的信号量对象
+     * @param fallbackSemaphore   处理 降级 的信号量对象
      * @param executionSemaphore    处理 执行的 信号量对象
      * @param propertiesStrategy   属性策略对象
      * @param executionHook  执行钩子
@@ -545,7 +545,7 @@ import java.util.concurrent.atomic.AtomicReference;
     protected abstract Observable<R> getExecutionObservable();
 
     /**
-     * 获取 回退时的 observable
+     * 获取 降级时的 observable
      * @return
      */
     protected abstract Observable<R> getFallbackObservable();
@@ -650,12 +650,16 @@ import java.util.concurrent.atomic.AtomicReference;
             }
         };
 
+        /**
+         * 包装返回结果  一般 R就是 Observable
+         */
         final Func1<R, R> wrapWithAllOnNextHooks = new Func1<R, R>() {
             @Override
             public R call(R r) {
                 R afterFirstApplication = r;
 
                 try {
+                    // 允许使用钩子进行加工一般情况下 hook 都是noop
                     afterFirstApplication = executionHook.onComplete(_cmd, r);
                 } catch (Throwable hookEx) {
                     logger.warn("Error calling HystrixCommandExecutionHook.onComplete", hookEx);
@@ -696,7 +700,7 @@ import java.util.concurrent.atomic.AtomicReference;
             @Override
             public Observable<R> call() {
                 /* this is a stateful object so can only be used once */
-                // 尝试构造 observable chain 失败时 直接抛出异常 BadRequest 是 不会进行回退的
+                // 尝试构造 observable chain 失败时 直接抛出异常 BadRequest 是 不会进行降级的
                 if (!commandState.compareAndSet(CommandState.NOT_STARTED, CommandState.OBSERVABLE_CHAIN_CREATED)) {
                     IllegalStateException ex = new IllegalStateException("This instance can only be executed once. Please instantiate a new instance.");
                     //TODO make a new error type for this
@@ -727,16 +731,18 @@ import java.util.concurrent.atomic.AtomicReference;
                     if (fromCache != null) {
                         // 存在缓存 代表要从缓存中返回结果
                         isResponseFromCache = true;
-                        // 处理从缓存中 获取的结果
+                        // 因为 缓存对象 会关联到一个 Observable 对象 而 返回的缓存对象实际上就是关联到同一个Observable 上
+                        // 这样一旦上游发射元素 下游也会获取到
                         return handleRequestCacheHitAndEmitValues(fromCache, _cmd);
                     }
                 }
 
                 // 当没有使用缓存的时候 开始正常的执行command
                 Observable<R> hystrixObservable =
-                        // 每次发射的 元素 通过调用 applyHystrixSemantics 使得执行command 被 hystrix 包裹  这里返回的 observable 可能是发射error 的数据流
+                        // 包装Command 实现类的 run() 方法 并有可能发生3种情况  1 正常执行run() 2 失败走降级方法
+                        // 3 其余情况(比如无法正常执行降级方法 如信号量不足) 返回异常
                         Observable.defer(applyHystrixSemantics)
-                                // 对该对象 的行为做封装 每次调用都会触发 hook.onComplete  和 onEmit
+                                // 允许使用 hook 对象 对结果进行加工
                                 .map(wrapWithAllOnNextHooks);
 
                 Observable<R> afterCache;
@@ -820,8 +826,9 @@ import java.util.concurrent.atomic.AtomicReference;
                     /* used to track userThreadExecutionTime */
                     // 设置 任务启动时间
                     executionResult = executionResult.setInvocationStartTime(System.currentTimeMillis());
-                    // 开始执行任务
+                    // 开始执行任务 executeCommandAndObserve 代表一个正常情况下调用run() 如果出现容许异常 就走 fallback 降级方法 再失败就返回Observable.error
                     return executeCommandAndObserve(_cmd)
+                            // 记录发生的异常
                             .doOnError(markExceptionThrown)
                             .doOnTerminate(singleSemaphoreRelease)
                             .doOnUnsubscribe(singleSemaphoreRelease);
@@ -866,7 +873,7 @@ import java.util.concurrent.atomic.AtomicReference;
                     executionResult = executionResult.addEvent(HystrixEventType.EMIT);
                     eventNotifier.markEvent(HystrixEventType.EMIT, commandKey);
                 }
-                // command 是否是 标量??? 是的话记录SUCCESS 数据
+                // command 是否是 标量??? 是的话记录SUCCESS 数据  默认是  true
                 if (commandIsScalar()) {
                     long latency = System.currentTimeMillis() - executionResult.getStartTimestamp();
                     eventNotifier.markEvent(HystrixEventType.SUCCESS, commandKey);
@@ -883,7 +890,7 @@ import java.util.concurrent.atomic.AtomicReference;
         final Action0 markOnCompleted = new Action0() {
             @Override
             public void call() {
-                // 看来只有设置该标识时 才会 统计某些数据
+                // 看来只有设置该标识时 才会 统计某些数据 默认为true
                 if (!commandIsScalar()) {
                     long latency = System.currentTimeMillis() - executionResult.getStartTimestamp();
                     eventNotifier.markEvent(HystrixEventType.SUCCESS, commandKey);
@@ -894,22 +901,22 @@ import java.util.concurrent.atomic.AtomicReference;
             }
         };
 
-        // 当处理 回退方法时 触发
+        // 当处理 降级方法时 触发
         final Func1<Throwable, Observable<R>> handleFallback = new Func1<Throwable, Observable<R>>() {
             @Override
             public Observable<R> call(Throwable t) {
-                // 因为 发起了 回退 所以当前操作失败的概率 很高就 打开熔断器
+                // 由半开变成打开
                 circuitBreaker.markNonSuccess();
                 // 将抛出的Throwable 封装成 Exception
                 Exception e = getExceptionFromThrowable(t);
                 executionResult = executionResult.setExecutionException(e);
-                // 拒绝执行时 走特殊的处理逻辑  该异常是由  ThreadPool 抛出的 这里会根据是否 设置回退逻辑 进行重试
+                // 拒绝执行时 走特殊的处理逻辑  该异常是由  ThreadPool 抛出的 这里会根据是否 设置降级逻辑 调用降级方法
                 if (e instanceof RejectedExecutionException) {
                     return handleThreadPoolRejectionViaFallback(e);
                 // 如果是 hystrix超时的异常
                 } else if (t instanceof HystrixTimeoutException) {
                     return handleTimeoutViaFallback();
-                // 如果 是 badRequest 这里不会进行回退
+                // 如果 是 badRequest 这里不会进行降级
                 } else if (t instanceof HystrixBadRequestException) {
                     return handleBadRequestByEmittingError(e);
                 } else {
@@ -922,7 +929,7 @@ import java.util.concurrent.atomic.AtomicReference;
                         return Observable.error(e);
                     }
 
-                    // 进行回退 or 抛出异常 (如果是 不可恢复的error 对象就不重试)
+                    // 进行降级 or 抛出异常 (如果是 不可恢复的error 对象就不重试)
                     return handleFailureViaFallback(e);
                 }
             }
@@ -948,6 +955,7 @@ import java.util.concurrent.atomic.AtomicReference;
             // 允许超时的话  将 command 隔离后 使用TimeoutOperator 进行代理
             // executeCommandWithSpecifiedIsolation 使用  thread  或者信号量进行隔离 之后返回 用户自定义的 Observable 对象
             execution = executeCommandWithSpecifiedIsolation(_cmd)
+                    // 对observable 进行代理  该对象 实时检测是否 超时
                     .lift(new HystrixObservableTimeoutOperator<R>(_cmd));
         } else {
             execution = executeCommandWithSpecifiedIsolation(_cmd);
@@ -957,14 +965,14 @@ import java.util.concurrent.atomic.AtomicReference;
         return execution.doOnNext(markEmits)
                 // 设置了 需要统计数据的场景下 将 complete的数据 设置到 统计对象中
                 .doOnCompleted(markOnCompleted)
-                // 遇到异常时  不走 onError 而是尝试走这个方法  也就是判断异常是否 有回退的可能 有的话 就进行回退 否则抛出异常
+                // 遇到异常时  不走 onError 而是尝试走这个方法  也就是判断异常是否 有降级的可能 有的话 就进行降级 否则抛出异常
                 .onErrorResumeNext(handleFallback)
-                // 针对每个请求 都要切换上下文  因为 一旦切换到其他线程就会丢失请求信息
+                // 针对每个请求 都要切换上下文 主要是针对使用了Thread 隔离的情况
                 .doOnEach(setRequestContext);
     }
 
     /**
-     * 使用特殊的隔离策略 来执行command
+     * 使用特殊的隔离策略 来执行command  当没有使用线程进行隔离时 其实就是普通的调用 只是多些统计
      * @param _cmd
      * @return
      */
@@ -1053,7 +1061,7 @@ import java.util.concurrent.atomic.AtomicReference;
                     }
                     //if it was terminal, then other cleanup handled it
                 }
-            // 在这里 使用 Schduler 实现了 线程隔离
+            // 在这里 使用 hystrix 定制的 Scheduler 对象 而不是 rxjava 原生的线程调度器
             }).subscribeOn(threadPool.getScheduler(new Func0<Boolean>() {
                 @Override
                 public Boolean call() {
@@ -1062,6 +1070,7 @@ import java.util.concurrent.atomic.AtomicReference;
                 }
             }));
         } else {
+            // 当没有使用Thread 进行隔离时  只是没有 subscribeOn 代表 订阅在当前线程触发
             return Observable.defer(new Func0<Observable<R>>() {
                 @Override
                 public Observable<R> call() {
@@ -1127,12 +1136,12 @@ import java.util.concurrent.atomic.AtomicReference;
             // 将异常信息封装成 hystrix 异常对象 并发射到下游
             return Observable.error(new HystrixRuntimeException(failureType, this.getClass(), getLogMessagePrefix() + " " + message + " and encountered unrecoverable error.", e, null));
         } else {
-            // 如果是可恢复的 Error 尝试 使用hystrix 的回退机制
+            // 如果是可恢复的 Error 尝试 使用hystrix 的降级机制
             if (isRecoverableError(originalException)) {
                 logger.warn("Recovered from java.lang.Error by serving Hystrix fallback", originalException);
             }
 
-            // 判断是否开启了回退机制
+            // 判断是否开启了降级机制
             if (properties.fallbackEnabled().get()) {
                 /* fallback behavior is permitted so attempt */
 
@@ -1144,32 +1153,32 @@ import java.util.concurrent.atomic.AtomicReference;
                     }
                 };
 
-                // 处理回退方法 时收到 发射的元素
+                // 处理降级方法 时收到 发射的元素
                 final Action1<R> markFallbackEmit = new Action1<R>() {
                     @Override
                     public void call(R r) {
                         // 是否 要 输出到下面的event 中
                         if (shouldOutputOnNextEvents()) {
                             executionResult = executionResult.addEvent(HystrixEventType.FALLBACK_EMIT);
-                            // 标记成 回退发射
+                            // 标记成 降级发射
                             eventNotifier.markEvent(HystrixEventType.FALLBACK_EMIT, commandKey);
                         }
                     }
                 };
 
-                // 标记执行回退完成
+                // 标记执行降级完成
                 final Action0 markFallbackCompleted = new Action0() {
                     @Override
                     public void call() {
                         // 获取本次任务执行时间
                         long latency = System.currentTimeMillis() - executionResult.getStartTimestamp();
-                        // 标记回退成功事件
+                        // 标记降级成功事件
                         eventNotifier.markEvent(HystrixEventType.FALLBACK_SUCCESS, commandKey);
                         executionResult = executionResult.addEvent((int) latency, HystrixEventType.FALLBACK_SUCCESS);
                     }
                 };
 
-                // 处理回退异常  当 接收到 onError后 会触发该方法  如果用户没有设置回退方法 就会返回一个 直接发射 error 的 observable 对象 也就会 触发这里的逻辑
+                // 处理降级异常  当 接收到 onError后 会触发该方法  如果用户没有设置降级方法 就会返回一个 直接发射 error 的 observable 对象 也就会 触发这里的逻辑
                 final Func1<Throwable, Observable<R>> handleFallbackError = new Func1<Throwable, Observable<R>>() {
                     @Override
                     public Observable<R> call(Throwable t) {
@@ -1182,7 +1191,7 @@ import java.util.concurrent.atomic.AtomicReference;
                         long latency = System.currentTimeMillis() - executionResult.getStartTimestamp();
                         Exception toEmit;
 
-                        // 没有设置回退方法的情况下 就会返回UnsupportedOperationException 代表 该command 本身就不支持回退
+                        // 没有设置降级方法的情况下 就会返回UnsupportedOperationException 代表 该command 本身就不支持降级
                         if (fe instanceof UnsupportedOperationException) {
                             logger.debug("No fallback for HystrixCommand. ", fe); // debug only since we're throwing the exception and someone higher will do something with it
                             eventNotifier.markEvent(HystrixEventType.FALLBACK_MISSING, commandKey);
@@ -1190,9 +1199,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
                             toEmit = new HystrixRuntimeException(failureType, _cmd.getClass(), getLogMessagePrefix() + " " + message + " and no fallback available.", e, fe);
                         } else {
-                            // 如果执行 回退方法失败的情况
+                            // 如果执行 降级方法失败的情况
                             logger.debug("HystrixCommand execution " + failureType.name() + " and fallback failed.", fe);
-                            // 标记回退失败
+                            // 标记降级失败
                             eventNotifier.markEvent(HystrixEventType.FALLBACK_FAILURE, commandKey);
                             executionResult = executionResult.addEvent((int) latency, HystrixEventType.FALLBACK_FAILURE);
 
@@ -1210,7 +1219,7 @@ import java.util.concurrent.atomic.AtomicReference;
                     }
                 };
 
-                // 获取 回退使用的信号量 看来回退 也是有数量限制的  如果 获取 回退的信号量 也失败 可能要等待一段时间  该信号量 是一定会设置的  而执行是否使用信号量是 根据隔离策略
+                // 获取 降级使用的信号量 看来降级 也是有数量限制的  如果 获取 降级的信号量 也失败 可能要等待一段时间  该信号量 是一定会设置的  而执行是否使用信号量是 根据隔离策略
                 final TryableSemaphore fallbackSemaphore = getFallbackSemaphore();
                 // 默认情况下 该信号量还没有被释放
                 final AtomicBoolean semaphoreHasBeenReleased = new AtomicBoolean(false);
@@ -1224,27 +1233,27 @@ import java.util.concurrent.atomic.AtomicReference;
                     }
                 };
 
-                // 回退执行链
+                // 降级执行链
                 Observable<R> fallbackExecutionChain;
 
                 // acquire a permit
-                // 上面只是 创建执行回退需要的 函数 这里才是真正执行回退的逻辑  如果 没有获取到 回退的信号量 会触发下游的 onError 不过这是默认情况
+                // 上面只是 创建执行降级需要的 函数 这里才是真正执行降级的逻辑  如果 没有获取到 降级的信号量 会触发下游的 onError 不过这是默认情况
                 if (fallbackSemaphore.tryAcquire()) {
                     try {
-                        // 判断用户是否设置了自定义的回退方法  如果用户没有设置回退方法 返回的 fallbackExecutionChain 是一个会直接发射异常的 Observable 对象
+                        // 判断用户是否设置了自定义的降级方法  如果用户没有设置降级方法 返回的 fallbackExecutionChain 是一个会直接发射异常的 Observable 对象
                         if (isFallbackUserDefined()) {
-                            // 代表 开始执行回退
+                            // 代表 开始执行降级
                             executionHook.onFallbackStart(this);
-                            // 该方法会 将command 实现类的  回退方法 返回结果 用 observable 包裹起来
+                            // 该方法会 将command 实现类的  降级方法 返回结果 用 observable 包裹起来
                             fallbackExecutionChain = getFallbackObservable();
                         } else {
                             //same logic as above without the hook invocation
-                            // 同样包装回退方法
+                            // 同样包装降级方法
                             fallbackExecutionChain = getFallbackObservable();
                         }
                     } catch (Throwable ex) {
                         //If hook or user-fallback throws, then use that as the result of the fallback lookup
-                        // 如果出现了异常 将 异常对象作为本次 回退 得到的结果
+                        // 如果出现了异常 将 异常对象作为本次 降级 得到的结果
                         fallbackExecutionChain = Observable.error(ex);
                     }
 
@@ -1268,11 +1277,11 @@ import java.util.concurrent.atomic.AtomicReference;
                             // 取消订阅时 释放信号量
                             .doOnUnsubscribe(singleSemaphoreRelease);
                 } else {
-                    // 如果进行回退时 没有获取到信号量 会触发下游的 onError
+                    // 如果进行降级时 没有获取到信号量 会触发下游的 onError
                     return handleFallbackRejectionByEmittingError();
                 }
             } else {
-                // 禁止开启 回退 时 发射执行的异常
+                // 禁止开启 降级 时 发射执行的异常
                 return handleFallbackDisabledByEmittingError(originalException, failureType, message);
             }
         }
@@ -1411,7 +1420,7 @@ import java.util.concurrent.atomic.AtomicReference;
         eventNotifier.markEvent(HystrixEventType.SEMAPHORE_REJECTED, commandKey);
         logger.debug("HystrixCommand Execution Rejection by Semaphore."); // debug only since we're throwing the exception and someone higher will do something with it
         // retrieve a fallback or throw an exception if no fallback available
-        // 根据策略选择 回退 或者是 抛出异常 回退代表获取信号量失败时 没有直接 终止调用 而是 等待一段时间后开始重试
+        // 根据策略选择 降级 或者是 抛出异常 降级代表获取信号量失败时 没有直接 终止调用 而是 等待一段时间后开始重试
         return getFallbackOrThrowException(this, HystrixEventType.SEMAPHORE_REJECTED, FailureType.REJECTED_SEMAPHORE_EXECUTION,
                 "could not acquire a semaphore for execution", semaphoreRejectionException);
     }
@@ -1430,11 +1439,11 @@ import java.util.concurrent.atomic.AtomicReference;
         // 设置异常结果
         executionResult = executionResult.setExecutionException(shortCircuitException);
         try {
-            // 根据情况 选择 回退 还是 抛出异常  因为 本command 也许不支持 回退逻辑
+            // 根据情况 选择 降级 还是 抛出异常  因为 本command 也许不支持 降级逻辑
             return getFallbackOrThrowException(this, HystrixEventType.SHORT_CIRCUITED, FailureType.SHORTCIRCUIT,
                     "short-circuited", shortCircuitException);
         } catch (Exception e) {
-            // 如果 回退中出现了
+            // 如果 降级中出现了
             return Observable.error(e);
         }
     }
@@ -1450,7 +1459,7 @@ import java.util.concurrent.atomic.AtomicReference;
         // 统计相关数据
         threadPool.markThreadRejection();
         // use a fallback instead (or throw exception if not implemented)
-        // 这里是 根据 异常对象 选择 抛出异常还是 回退 以便下次重试
+        // 这里是 根据 异常对象 选择 抛出异常还是 降级 以便下次重试
         return getFallbackOrThrowException(this, HystrixEventType.THREAD_POOL_REJECTED, FailureType.REJECTED_THREAD_EXECUTION, "could not be queued for execution", underlying);
     }
 
@@ -1493,7 +1502,7 @@ import java.util.concurrent.atomic.AtomicReference;
     }
 
     /**
-     * 处理失败 情况 这里主要是 通知监听器 和设置 result 对象 并且根据异常信息来判断是回退还是抛出异常
+     * 处理失败 情况 这里主要是 通知监听器 和设置 result 对象 并且根据异常信息来判断是降级还是抛出异常
      * @param underlying
      * @return
      */
@@ -1512,7 +1521,7 @@ import java.util.concurrent.atomic.AtomicReference;
     }
 
     /**
-     * 当回退时 被 隔离策略拒绝 体现在 没有 信号量 permit
+     * 当降级时 被 隔离策略拒绝 体现在 没有 信号量 permit
      * @return
      */
     private Observable<R> handleFallbackRejectionByEmittingError() {
@@ -1687,6 +1696,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
                 @Override
                 public int getIntervalTimeInMilliseconds() {
+                    // 代表每过这么长时间就将当前任务修改为超时任务
                     return originalCommand.properties.executionTimeoutInMilliseconds().get();
                 }
             };
@@ -1770,11 +1780,11 @@ import java.util.concurrent.atomic.AtomicReference;
      * Get the TryableSemaphore this HystrixCommand should use if a fallback occurs.
      *
      * @return TryableSemaphore
-     * 获取回退的信号量
+     * 获取降级的信号量
      */
     protected TryableSemaphore getFallbackSemaphore() {
         if (fallbackSemaphoreOverride == null) {
-            // 获取针对 回退的信号量
+            // 获取针对 降级的信号量
             TryableSemaphore _s = fallbackSemaphorePerCircuit.get(commandKey.name());
             if (_s == null) {
                 // we didn't find one cache so setup

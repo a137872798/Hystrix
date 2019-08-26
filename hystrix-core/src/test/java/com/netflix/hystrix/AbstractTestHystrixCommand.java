@@ -91,7 +91,7 @@ public interface AbstractTestHystrixCommand<R> extends HystrixObservable<R>, Ins
     }
 
     /**
-     * 回退结果
+     * 降级结果
      */
     enum FallbackResult {
         /**

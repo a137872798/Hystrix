@@ -66,7 +66,7 @@ public abstract class HystrixObservableCommand<R> extends AbstractCommand<R> imp
     }
 
     /**
-     * 获取回退方法名
+     * 获取降级方法名
      * @return
      */
     @Override
@@ -75,7 +75,7 @@ public abstract class HystrixObservableCommand<R> extends AbstractCommand<R> imp
     }
 
     /**
-     * 判断用户是否设置了回退方法
+     * 判断用户是否设置了降级方法
      * @return
      */
     @Override

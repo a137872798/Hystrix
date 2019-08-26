@@ -92,6 +92,8 @@ public class HystrixCommandDemo {
     public void executeSimulatedUserRequestForOrderConfirmationAndCreditCardPayment() throws InterruptedException, ExecutionException {
         /* fetch user object with http cookies */
         // hystrix 的使用方式 就是针对 每个 跨服务请求 都是用 command 对象进行包裹 这样就能实现隔离 不会因为某个请求延时  导致其他请求 被拖垮
+        // 当前command 执行还是可能会抛出异常的
+        // 因为下一步的 结果需要依赖这一步的结果 所以要执行调用execute() 也就是 queue().get()
         UserAccount user = new GetUserAccountCommand(new HttpCookie("mockKey", "mockValueFromHttpRequest")).execute();
 
         /* fetch the payment information (asynchronously) for the user so the credit card payment can proceed */
@@ -99,9 +101,11 @@ public class HystrixCommandDemo {
 
         /* fetch the order we're processing for the user */
         int orderIdFromRequestArgument = 13579;
+        // 获取订单结果
         Order previouslySavedOrder = new GetOrderCommand(orderIdFromRequestArgument).execute();
 
         CreditCardCommand credit = new CreditCardCommand(previouslySavedOrder, paymentInformation.get(), new BigDecimal(123.45));
+        // 阻塞获取结果
         credit.execute();
     }
 

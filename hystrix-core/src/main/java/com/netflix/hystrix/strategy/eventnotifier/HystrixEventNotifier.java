@@ -45,7 +45,7 @@ public abstract class HystrixEventNotifier {
      * 
      * @param eventType event type
      * @param key event key
-     *            标记当前事件 在每个事件执行时会调用 eventType  代表本次 执行结果 可能是 成功/回退 等等   hystrixCommandKey 就是本次的命令键
+     *            标记当前事件 在每个事件执行时会调用 eventType  代表本次 执行结果 可能是 成功/降级 等等   hystrixCommandKey 就是本次的命令键
      */
     public void markEvent(HystrixEventType eventType, HystrixCommandKey key) {
         // do nothing

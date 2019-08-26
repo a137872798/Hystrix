@@ -316,7 +316,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
      * DEFAULT BEHAVIOR: It throws UnsupportedOperationException.
      * 
      * @return R or throw UnsupportedOperationException if not implemented
-     * 设置 回退逻辑 ???
+     * 设置 降级逻辑 ???
      */
     protected R getFallback() {
         throw new UnsupportedOperationException("No fallback available.");
@@ -351,7 +351,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
     }
 
     /**
-     * 获得 子类实现的 回退方法
+     * 获得 子类实现的 降级方法
      * @return
      */
     @Override
@@ -379,7 +379,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
      *             if invalid arguments or state were used representing a user failure, not a system failure
      * @throws IllegalStateException
      *             if invoked more than once
-     *             阻塞获取 结果 / 抛出异常
+     *             阻塞获取 结果 / 抛出异常  在hystrix 中 即使设置了 fallback方法 也有可能无法正常执行
      */
     public R execute() {
         try {
@@ -418,7 +418,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
          * interruption of the execution thread when the "mayInterrupt" flag of Future.cancel(boolean) is set to true;
          * thus, to comply with the contract of Future, we must wrap around it.
          * 获取 具备 hystrix 熔断功能的 observable 对象 并转换成一个 future 对象
-         * 通过 构造Command 对象后 调用 queue 获取结果对象 (或者调用 execute() 阻塞获取结果对象)
+         * 该对象可能是 执行了 run() 也可能是执行了 fallback() 也可能是抛出了异常
          */
         final Future<R> delegate = toObservable().toBlocking().toFuture();
 
@@ -517,7 +517,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
     }
 
     /**
-     * 默认的 回退方法名 应该是在 command 的实现类 中 会选择 指定的 方法作为 fallback 的触发方法
+     * 默认的 降级方法名 应该是在 command 的实现类 中 会选择 指定的 方法作为 fallback 的触发方法
      * @return
      */
     @Override
@@ -526,7 +526,7 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
     }
 
     /**
-     * 是否由用户定义了 回退方法
+     * 是否由用户定义了 降级方法
      * @return
      */
     @Override

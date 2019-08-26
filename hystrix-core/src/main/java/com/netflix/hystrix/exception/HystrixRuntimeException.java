@@ -33,7 +33,7 @@ public class HystrixRuntimeException extends RuntimeException {
      */
     private final Class<? extends HystrixInvokable> commandClass;
     /**
-     * 回退异常
+     * 降级异常
      */
     private final Throwable fallbackException;
     /**

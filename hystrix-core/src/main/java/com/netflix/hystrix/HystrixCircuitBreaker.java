@@ -248,7 +248,7 @@ public interface HystrixCircuitBreaker {
                                 // if it was half-open, we need to wait for a successful command execution
                                 // if it was open, we need to wait for sleep window to elapse
                             } else {
-                                // 这里开始 判断是否需要熔断 如果 失败比率 低于 熔断 比率 不进行处理
+                                // 这里开始 判断是否需要熔断 如果 失败比率 低于熔断比率 不进行处理
                                 if (hc.getErrorPercentage() < properties.circuitBreakerErrorThresholdPercentage().get()) {
                                     //we are not past the minimum error threshold for the stat window,
                                     // so no change to circuit status.
@@ -286,7 +286,7 @@ public interface HystrixCircuitBreaker {
                 // 生成一个新的订阅者对象 并设置
                 Subscription newSubscription = subscribeToStream();
                 activeSubscription.set(newSubscription);
-                // 重置熔断时间
+                // 重置熔断时间  这样 之后尝试执行的 同一command 就可以顺利执行了
                 circuitOpened.set(-1L);
             }
         }

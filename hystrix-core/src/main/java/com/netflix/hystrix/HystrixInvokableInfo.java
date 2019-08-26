@@ -102,7 +102,7 @@ public interface HystrixInvokableInfo<R> {
     Throwable getFailedExecutionException();
 
     /**
-     * 是否是从 回退中返回的 响应结果
+     * 是否是从 降级中返回的 响应结果
      * @return
      */
     boolean isResponseFromFallback();
@@ -156,7 +156,7 @@ public interface HystrixInvokableInfo<R> {
     int getNumberEmissions();
 
     /**
-     * 回退发散数???
+     * 降级发散数???
      * @return
      */
     int getNumberFallbackEmissions();

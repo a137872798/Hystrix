@@ -107,11 +107,11 @@ public class ExecutionResult {
          */
         private final BitSet events;
         /**
-         * 在 hystrix 中存在几种类型的事件 包含 发射事件  和 回退发射事件  这里就是记录了对应的事件
+         * 在 hystrix 中存在几种类型的事件 包含 发射事件  和 降级发射事件  这里就是记录了对应的事件
          */
         private final int numEmissions;
         /**
-         * 回退数量
+         * 降级数量
          */
         private final int numFallbackEmissions;
         /**
@@ -124,7 +124,7 @@ public class ExecutionResult {
             this.events = new BitSet(NUM_EVENT_TYPES);
             // 默认发行数量为0
             this.numEmissions = 0;
-            // 默认回退数量为0
+            // 默认降级数量为0
             this.numFallbackEmissions = 0;
             // 碰撞数为0
             this.numCollapsed = 0;
@@ -161,7 +161,7 @@ public class ExecutionResult {
                         newBitSet.set(HystrixEventType.EMIT.ordinal());
                         localNumEmits++;
                         break;
-                    // 回退时 发出 的事件
+                    // 降级时 发出 的事件
                     case FALLBACK_EMIT:
                         newBitSet.set(HystrixEventType.FALLBACK_EMIT.ordinal());
                         localNumFallbackEmits++;

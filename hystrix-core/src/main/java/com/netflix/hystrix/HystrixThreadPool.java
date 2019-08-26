@@ -56,12 +56,12 @@ public interface HystrixThreadPool {
     public ExecutorService getExecutor();
 
     /**
-     * 获取定时器对象
+     * 获取调度器对象
      */
     public Scheduler getScheduler();
 
     /**
-     * 获取定时器对象 传入一个 回调对象
+     * 获取线程调度器 传入一个 回调对象
      * @param shouldInterruptThread
      * @return
      */
@@ -269,12 +269,14 @@ public interface HystrixThreadPool {
          */
         @Override
         public Scheduler getScheduler(Func0<Boolean> shouldInterruptThread) {
+            // 相当于 更新配置
             touchConfig();
             // 生成一个调度对象
             return new HystrixContextScheduler(HystrixPlugins.getInstance().getConcurrencyStrategy(), this, shouldInterruptThread);
         }
 
         // allow us to change things via fast-properties by setting it each time
+        // 允许当前时刻 去获取最新的 配置 因为 Porperties 默认实现是 一个动态配置工厂
         private void touchConfig() {
             final int dynamicCoreSize = properties.coreSize().get();
             final int configuredMaximumSize = properties.maximumSize().get();

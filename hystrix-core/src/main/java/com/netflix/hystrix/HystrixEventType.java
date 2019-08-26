@@ -60,27 +60,27 @@ public enum HystrixEventType {
      */
     SEMAPHORE_REJECTED(false),
     /**
-     * 回退发射
+     * 降级发射
      */
     FALLBACK_EMIT(false),
     /**
-     * 回退引发的成功
+     * 降级引发的成功
      */
     FALLBACK_SUCCESS(true),
     /**
-     * 回退引发的失败
+     * 降级引发的失败
      */
     FALLBACK_FAILURE(true),
     /**
-     * 回退引发的拒绝
+     * 降级引发的拒绝
      */
     FALLBACK_REJECTION(true),
     /**
-     * 回退引发的 不能使用
+     * 降级引发的 不能使用
      */
     FALLBACK_DISABLED(true),
     /**
-     * 回退引发的 miss???
+     * 降级引发的 miss???
      */
     FALLBACK_MISSING(true),
     /**

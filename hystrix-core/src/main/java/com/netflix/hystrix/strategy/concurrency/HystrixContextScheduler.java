@@ -208,6 +208,7 @@ public class HystrixContextScheduler extends Scheduler {
 
         /**
          * 明确了 在提交任务前 必须要 有订阅者
+         * 这段暂时看不懂 可以看作普通的 rxjava 调度器
          * @param action
          * @return
          */
@@ -227,6 +228,7 @@ public class HystrixContextScheduler extends Scheduler {
             // 提交任务
             ThreadPoolExecutor executor = (ThreadPoolExecutor) threadPool.getExecutor();
             FutureTask<?> f = (FutureTask<?>) executor.submit(sa);
+            // FutureCompleterWithConfigurableInterrupt 对象订阅数据流 并在取消订阅时 触发逻辑 将future 从线程池中移除
             sa.add(new FutureCompleterWithConfigurableInterrupt(f, shouldInterruptThread, executor));
 
             return sa;
